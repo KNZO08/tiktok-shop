@@ -14,22 +14,37 @@ SILENCE_CUT = (
     ":stop_periods=-1:stop_duration=0.14:stop_threshold=-42dB:stop_silence=0.07"
 )
 
-_sem = None
+# Microsoft a déplacé le service de voix (octobre 2026) : le nouvel hôte marche partout, l'ancien seulement dans certains pays.
+# On essaie le nouveau d'abord et on bascule automatiquement sur l'autre en cas de refus (403).
+_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4"
+_ENDPOINTS = [
+    f"wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1?Ocp-Apim-Subscription-Key={_TOKEN}",
+    f"wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken={_TOKEN}",
+]
+_state = {"i": 0}
+
+
+def _use_endpoint(i):
+    import edge_tts.communicate as cm
+    cm.WSS_URL = _ENDPOINTS[i % len(_ENDPOINTS)]
 
 
 async def _one(text, voice, rate, out, sem):
     import edge_tts
     last = None
     async with sem:
-        for attempt in range(4):
+        for attempt in range(6):
+            i = _state["i"]
+            _use_endpoint(i)
             try:
                 await edge_tts.Communicate(text, voice, rate=rate).save(str(out))
                 if Path(out).exists() and Path(out).stat().st_size > 800:
                     return
-            except Exception as e:  # réseau, limitation…
+            except Exception as e:  # réseau, refus de Microsoft…
                 last = e
-            await asyncio.sleep(1.0 * (attempt + 1))
-    raise RuntimeError("La voix off n'a pas pu être générée (connexion Internet ?) : " + str(last)[:200])
+                _state["i"] = (i + 1) % len(_ENDPOINTS)     # on essaie l'autre adresse
+            await asyncio.sleep(0.8 * (attempt + 1))
+    raise RuntimeError("La voix off n'a pas pu être générée (Internet ? ou le service gratuit de Microsoft est en panne) : " + str(last)[:200])
 
 
 async def _all(texts, voice, rate, outs):

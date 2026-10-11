@@ -1,0 +1,7 @@
+yt-dlp[default,curl-cffi]
+edge-tts
+imageio-ffmpeg
+numpy
+opencv-python-headless
+Pillow
+anthropic

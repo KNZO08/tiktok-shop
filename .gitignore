@@ -1,0 +1,9 @@
+.venv/
+work/
+outputs/
+settings.json
+__pycache__/
+*.pyc
+.DS_Store
+# capture d'écran d'origine (contient ton navigateur) : reste en local
+assets/screenshot_source.webp

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Générateur TikTok Shop</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23fe2c55'/%3E%3Cpath d='M11 9v14l12-7z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true"></span><span>Générateur <b>TikTok Shop</b></span></div>
+  <div class="top-actions">
+    <button class="chip" id="keyChip" type="button" title="Clé API Anthropic"></button>
+    <button class="btn ghost" id="openSettings" type="button">⚙︎ Réglages</button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ÉTAPE 1 + 2 : nouvelle série -->
+  <section class="card" id="setup" aria-labelledby="setupTitle">
+    <div class="card-head">
+      <h1 id="setupTitle">Nouvelle série de vidéos</h1>
+      <p class="muted">Colle les liens des vidéos TikTok d'origine : le générateur fait le reste (miroir, script vendeur, voix off, personnage animé).</p>
+    </div>
+
+    <div id="step1" class="step">
+      <label class="q" for="countInput">Combien de vidéos veux-tu générer ?</label>
+      <div class="row">
+        <div class="stepper">
+          <button type="button" id="minus" aria-label="Moins">−</button>
+          <input id="countInput" type="number" min="1" max="50" value="5" inputmode="numeric">
+          <button type="button" id="plus" aria-label="Plus">+</button>
+        </div>
+        <button class="btn primary" id="toLinks" type="button">Continuer →</button>
+      </div>
+    </div>
+
+    <div id="step2" class="step" hidden>
+      <div class="q-row">
+        <p class="q" id="linksTitle">Colle les liens</p>
+        <button class="link" id="changeCount" type="button">Changer le nombre</button>
+      </div>
+      <p class="muted small">Astuce : tu peux coller toute ta liste d'un coup (un lien par ligne) dans la première case, elle se répartit toute seule.</p>
+      <ol class="links" id="links"></ol>
+      <div class="row end">
+        <span class="muted small" id="linksHint"></span>
+        <button class="btn primary big" id="generate" type="button">Générer les vidéos</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROGRESSION -->
+  <section id="progress" hidden aria-live="polite">
+    <div class="card global">
+      <div class="global-top">
+        <div>
+          <h2 id="globalTitle">Génération en cours</h2>
+          <p class="muted small" id="globalSub"></p>
+        </div>
+        <div class="global-actions">
+          <button class="btn ghost" id="cancelAll" type="button">Tout annuler</button>
+          <button class="btn ghost" id="clearDone" type="button" hidden>Vider la liste</button>
+        </div>
+      </div>
+      <div class="bar big" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="globalBar"><i></i><span id="globalPct">0 %</span></div>
+    </div>
+    <div class="notice" id="waitBanner" hidden>
+      <b>✍️ Claude écrit les scripts.</b>
+      <span id="waitText"></span>
+      Si rien ne bouge au bout d'une minute, écris-lui dans la conversation : <i>« écris les scripts en attente »</i>.
+    </div>
+    <div class="jobs" id="jobs"></div>
+  </section>
+
+  <!-- HISTORIQUE -->
+  <section id="historySec" hidden>
+    <div class="sec-head"><h2>Mes vidéos précédentes</h2><span class="muted small" id="histCount"></span></div>
+    <div class="hist" id="hist"></div>
+  </section>
+
+  <footer class="foot muted small">
+    Les vidéos sont enregistrées dans le dossier <code>outputs</code> du projet. Utilise des vidéos dont tu as les droits (les tiennes, celles de ton fournisseur ou d'un créateur qui t'a autorisé).
+  </footer>
+</main>
+
+<!-- LECTEUR -->
+<dialog id="viewer" class="modal viewer">
+  <div class="viewer-body">
+    <video id="viewerVideo" controls playsinline></video>
+    <div class="viewer-side">
+      <h3 id="viewerTitle"></h3>
+      <p class="muted small" id="viewerMeta"></p>
+      <div class="script" id="viewerScript"></div>
+      <div class="row wrap-row">
+        <a class="btn primary" id="viewerDl" download>Télécharger</a>
+        <button class="btn ghost" id="viewerReveal" type="button">Voir dans le Finder</button>
+        <button class="btn ghost danger" id="viewerDelete" type="button">Supprimer</button>
+        <button class="btn ghost" id="viewerClose" type="button">Fermer</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- RÉGLAGES -->
+<dialog id="settings" class="modal">
+  <form method="dialog" class="settings-form" id="settingsForm">
+    <div class="modal-head">
+      <h2>Réglages</h2>
+      <button class="icon-btn" type="button" id="closeSettings" aria-label="Fermer">✕</button>
+    </div>
+
+    <div class="settings-grid">
+      <div class="col">
+        <fieldset id="fsKey">
+          <legend>Clé API Anthropic <span class="tag soft">facultatif</span></legend>
+          <p class="muted small"><b>Sans clé</b>, c'est Claude (dans la conversation) qui regarde les captures et écrit chaque script. <b>Avec une clé</b> (console.anthropic.com → « API keys »), tout devient automatique, même quand la conversation est fermée. Elle reste sur ton ordinateur.</p>
+          <div class="row">
+            <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+            <button class="btn ghost" id="testKey" type="button">Tester</button>
+          </div>
+          <p class="small" id="keyStatus"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Voix off (toujours la même)</legend>
+          <div class="row">
+            <select id="voice"></select>
+            <button class="btn ghost" id="playVoice" type="button">▶ Écouter</button>
+          </div>
+          <label class="field">Rythme de la voix
+            <select id="voiceRate">
+              <option value="+0%">Normal</option>
+              <option value="+6%">Dynamique (recommandé)</option>
+              <option value="+12%">Très rapide</option>
+            </select>
+          </label>
+          <audio id="voiceAudio" hidden></audio>
+        </fieldset>
+
+        <fieldset>
+          <legend>Options</legend>
+          <label class="switch"><input type="checkbox" id="mirror"><span></span> Effet miroir sur la vidéo d'origine</label>
+          <label class="field">Vidéos générées en même temps
+            <select id="concurrency"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+          </label>
+          <label class="field">Consignes pour le script <span class="muted">(facultatif)</span>
+            <textarea id="extra" rows="3" placeholder="Ex : ton plus drôle, parler de livraison rapide, éviter le mot « gadget »…"></textarea>
+          </label>
+          <details class="adv"><summary>Avancé</summary>
+            <label class="field">Modèle Claude
+              <input id="model" type="text" spellcheck="false">
+            </label>
+          </details>
+        </fieldset>
+      </div>
+
+      <div class="col">
+        <fieldset>
+          <legend>Position du personnage</legend>
+          <p class="muted small">Place-le à droite, au-dessus de la zone des likes et de la légende TikTok.</p>
+          <div class="layout-box">
+            <div class="phone" aria-label="Aperçu de l'écran TikTok">
+              <div class="screen" id="screen">
+                <div class="zone zone-right"></div>
+                <div class="zone zone-bottom"></div>
+                <div class="ui-right"><i></i><i></i><i></i><i></i></div>
+                <div class="ui-bottom"><span class="cart">🛒 Panier</span><b></b><b></b></div>
+                <img class="char" id="charPreview" src="char_preview.png" alt="">
+              </div>
+            </div>
+            <div class="sliders">
+              <label class="slider">Taille <output id="oHeight"></output>
+                <input type="range" id="sHeight" min="20" max="50" step="1"></label>
+              <label class="slider">Distance du bord droit <output id="oRight"></output>
+                <input type="range" id="sRight" min="0" max="35" step="1"></label>
+              <label class="slider">Hauteur depuis le bas <output id="oBottom"></output>
+                <input type="range" id="sBottom" min="0" max="40" step="1"></label>
+              <button class="link" type="button" id="resetLayout">Remettre la position conseillée</button>
+              <p class="legend small"><span class="dot r"></span> boutons TikTok (like, partage…) <br><span class="dot b"></span> légende et panier orange</p>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <span class="muted small" id="saveStatus"></span>
+      <button class="btn primary" id="saveSettings" type="button">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

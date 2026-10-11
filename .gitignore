@@ -1,5 +1,7 @@
 .venv/
-work/
+work/*
+!work/.gitkeep
+!work/watch_inbox.sh
 outputs/
 settings.json
 __pycache__/

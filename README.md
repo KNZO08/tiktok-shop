@@ -22,6 +22,14 @@ Laisse la fenêtre noire ouverte tant que tu l'utilises.
 Dans **Réglages**, tu peux coller une clé API Anthropic (facultatif) et choisir la voix, la position du personnage
 (avec un aperçu de l'écran TikTok) et le nombre de vidéos générées en même temps.
 
+## Vidéos où l'on parle (doublage en français)
+
+Si la vidéo d'origine contient quelqu'un qui parle (dans une autre langue que le français), le générateur **l'écoute**
+(reconnaissance vocale gratuite et locale, faster-whisper), **traduit chaque phrase en français**, coupe le son d'origine et pose la voix
+française à l'instant où chaque phrase était dite. La durée reste celle de la vidéo : voix un peu accélérée si besoin, puis vidéo un peu
+ralentie, puis dernière image figée. L'appel à l'achat est ajouté à la fin (réglable). Réglages › « Vidéos où l'on parle ».
+Sans quelqu'un qui parle (musique seule…), on garde le script vendeur. La première fois, un modèle de ~500 Mo est téléchargé.
+
 ## Poster sur TikTok depuis le téléphone (QR code)
 
 Sur chaque vidéo, bouton **« Poster sur TikTok »** → un **QR code** s'affiche avec la **légende en français** (modifiable, bouton « Copier »).

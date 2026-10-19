@@ -69,16 +69,21 @@ def main():
         return
     for d in items:
         print("=" * 70)
-        print(f"JOB {d['job_id']}  ({d['kind']})  durée vidéo {d['duration']:.1f}s -> vise ~{d['target_words']} mots")
+        print(f"JOB {d['job_id']}  ({d['kind']})  durée vidéo {d['duration']:.1f}s" + (f" -> vise ~{d['target_words']} mots" if "target_words" in d else ""))
         print("Légende :", (d.get("original_caption") or d.get("caption") or "(aucune)")[:400], "  <- à traduire en français dans \"caption\"")
         if d.get("extra_instructions"):
             print("Consignes du vendeur :", d["extra_instructions"])
         print("Planche de captures :", d.get("sheet"))
+        if d["kind"] == "dub":
+            print(f"DOUBLAGE : langue d'origine = {d['language']} ; traduis chaque phrase en français (même id, max_words à respecter) :")
+            for sl in d["segments"]:
+                print(f"  [{sl['id']}] {sl['start']:.1f}-{sl['end']:.1f}s (max {sl['max_words']} mots) : {sl['text']}")
         if d["kind"] == "adjust":
             print(f"AJUSTEMENT : la voix dure {d['measured']:.1f}s, il faut {d['duration']:.1f}s ; script actuel ({d['words_now']} mots -> ~{d['target_words']}) :")
             print(json.dumps(d["previous"], ensure_ascii=False))
         print("Réponse à écrire dans :", d["reply_file"])
     print("=" * 70)
+    print('Format doublage : {"product": "...", "caption": "...", "segments": [{"id": 0, "text": "traduction FR", "gesture": "talk|wow|open|point|raise|count|wave|shrug|emphasis"}]}   (pas de geste basket)')
     print('Format : {"product": "...", "caption": "légende TikTok traduite en français + hashtags", "segments": [{"text": "...", "gesture": "wow|open|point|raise|count|wave|shrug|emphasis|talk|basket"}]}')
 
 

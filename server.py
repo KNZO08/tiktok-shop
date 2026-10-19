@@ -210,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if p == "/api/settings":
             patch = {}
-            for k in ("model", "voice", "voice_rate", "mirror", "concurrency", "extra_instructions", "layout", "hashtags"):
+            for k in ("model", "voice", "voice_rate", "mirror", "concurrency", "extra_instructions", "layout", "hashtags", "dub_mode", "dub_cta", "stt_model"):
                 if k in body:
                     patch[k] = body[k]
             if isinstance(body.get("anthropic_api_key"), str) and body["anthropic_api_key"].strip():
@@ -224,6 +224,12 @@ class Handler(BaseHTTPRequestHandler):
                     "right_pct": min(40, max(0, float(lo.get("right_pct", 15)))),
                     "bottom_pct": min(50, max(0, float(lo.get("bottom_pct", 19)))),
                 }
+            if patch.get("dub_mode") not in (None, "auto", "off"):
+                patch["dub_mode"] = "auto"
+            if patch.get("stt_model") not in (None, "tiny", "base", "small", "medium"):
+                patch["stt_model"] = "small"
+            if "dub_cta" in patch:
+                patch["dub_cta"] = bool(patch["dub_cta"])
             if "concurrency" in patch:
                 patch["concurrency"] = min(6, max(1, int(patch["concurrency"])))
             config.save_settings(patch)

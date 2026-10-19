@@ -6,3 +6,4 @@ opencv-python-headless
 Pillow
 anthropic
 segno
+faster-whisper

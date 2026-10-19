@@ -21,6 +21,9 @@ DEFAULTS = {
     "concurrency": 2,
     "extra_instructions": "",
     "layout": {"height_pct": 34, "right_pct": 15, "bottom_pct": 19},
+    "dub_mode": "auto",        # auto : si la vidéo contient quelqu'un qui parle, on traduit et on double en français ; off : toujours un script vendeur
+    "dub_cta": True,           # ajoute « Si tu veux commander… » à la fin des vidéos doublées
+    "stt_model": "small",      # modèle de reconnaissance vocale (small = bon compromis)
     "hashtags": "#tiktokmademebuyit #tiktokshop #fyp #bonplan",
     "wps": 3.7,           # mots par seconde (mesuré et affiné automatiquement)
 }

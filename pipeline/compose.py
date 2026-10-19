@@ -28,12 +28,12 @@ def place(layout, scale):
 
 
 def compose(video_path, voice_info, segments, out_path, workdir, settings, seed=1,
-            on_progress=None, should_cancel=None):
+            on_progress=None, should_cancel=None, fit=None):
     workdir = Path(workdir)
     layout = settings["layout"]
     src = media.probe(video_path)
     D = src["duration"]
-    fit = voicemod.fit_plan(voice_info["duration"], D)
+    fit = fit or voicemod.fit_plan(voice_info["duration"], D)
     a, Tf, k = fit["atempo"], fit["final"], fit["video_factor"]
 
     # 1) voix accordée à la durée finale + volume homogène
@@ -58,7 +58,7 @@ def compose(video_path, voice_info, segments, out_path, workdir, settings, seed=
         chain.append("hflip")
     chain += [f"setpts=PTS*{k:.6f}", f"fps={FPS}",
               f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase", f"crop={OUT_W}:{OUT_H}", "setsar=1",
-              "tpad=stop_mode=clone:stop_duration=2"]
+              "tpad=stop_mode=clone:stop_duration=12"]
     fc = f"[0:v]{','.join(chain)}[bg];[bg][1:v]overlay={X0}:{Y0}:eof_action=pass:format=auto,format=yuv420p[v]"
     cmd = [media.FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
            "-i", str(video_path),

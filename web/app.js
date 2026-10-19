@@ -194,7 +194,8 @@ function updateCard(c, j) {
       el("div", { class: "meta" },
         el("span", { text: `${r.duration.toFixed(1).replace(".", ",")} s` }),
         el("span", { text: `voix ×${r.voice_speed.toFixed(2).replace(".", ",")}` }),
-        el("span", { text: `vidéo ×${r.video_speed.toFixed(2).replace(".", ",")}` })),
+        el("span", { text: `vidéo ×${r.video_speed.toFixed(2).replace(".", ",")}` }),
+        ...(r.mode === "dub" ? [el("span", { class: "dubchip", text: `🎙 doublage ${r.source_language || ""} → fr` })] : [])),
       el("details", { class: "job-script" }, el("summary", { text: "Voir le script" }), el("div", { class: "script", text: r.script })));
     c.actions.append(
       el("a", { class: "btn", href: `/outputs/${r.file}`, download: r.file, text: "Télécharger" }),
@@ -274,6 +275,8 @@ function fillSettings() {
   $("#concurrency").value = String(s.concurrency);
   $("#extra").value = s.extra_instructions || "";
   $("#hashtags").value = s.hashtags || "";
+  $("#dubMode").value = s.dub_mode || "auto";
+  $("#dubCta").checked = s.dub_cta !== false;
   $("#model").value = s.model;
   $("#apiKey").value = "";
   $("#apiKey").placeholder = s.has_api_key ? `Clé enregistrée (${s.api_key_hint}) — colle une autre clé pour la remplacer` : "sk-ant-…";
@@ -297,7 +300,7 @@ async function saveSettings() {
   const body = {
     voice: $("#voice").value, voice_rate: $("#voiceRate").value, mirror: $("#mirror").checked,
     concurrency: +$("#concurrency").value, extra_instructions: $("#extra").value, model: $("#model").value.trim() || "claude-opus-5-5",
-    layout: currentLayout(), hashtags: $("#hashtags").value.trim(),
+    layout: currentLayout(), hashtags: $("#hashtags").value.trim(), dub_mode: $("#dubMode").value, dub_cta: $("#dubCta").checked,
   };
   const key = $("#apiKey").value.trim();
   if (key) body.anthropic_api_key = key;

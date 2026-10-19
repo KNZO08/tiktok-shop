@@ -7,14 +7,15 @@ import traceback
 import uuid
 from datetime import datetime
 
-from . import compose, config, download, media, scriptgen, voice
+from . import compose, config, download, media, scriptgen, stt, voice
 
 # (clé, libellé affiché, début, fin) — part de la barre de progression
 STAGES = {
     "queue": ("En attente…", 0.00, 0.00),
     "download": ("Téléchargement de la vidéo", 0.00, 0.09),
     "frames": ("Captures d'écran de la vidéo", 0.09, 0.12),
-    "script": ("Écriture du script vendeur", 0.12, 0.30),
+    "listen": ("Écoute de la vidéo (reconnaissance vocale)", 0.12, 0.18),
+    "script": ("Écriture du script vendeur", 0.18, 0.30),
     "voice": ("Génération de la voix off", 0.30, 0.42),
     "fit": ("Ajustement du script à la durée", 0.30, 0.42),
     "render": ("Montage : miroir, personnage animé, voix", 0.42, 0.98),
@@ -96,7 +97,8 @@ class Manager:
             return []
         script = None
         if j.result and j.result.get("segments"):          # montage terminé : on le refait avec le même script
-            script = dict(product=j.result.get("product", ""), caption=j.result.get("caption", ""), segments=j.result["segments"])
+            script = dict(product=j.result.get("product", ""), caption=j.result.get("caption", ""), segments=j.result["segments"],
+                          mode=j.result.get("mode"), source_language=j.result.get("source_language", ""), original_text=j.result.get("original_text", ""))
         elif j.script:
             script = j.script
         return self.submit([j.url], {0: script} if script else None)
@@ -105,7 +107,8 @@ class Manager:
         """Refait le montage d'une vidéo de l'historique (même lien, même script, nouvelle animation)."""
         f = config.OUTPUTS / (name.rsplit(".", 1)[0] + ".json")
         d = json.loads(f.read_text())
-        return self.submit([d["url"]], {0: dict(product=d.get("product", ""), caption=d.get("caption", ""), segments=d["segments"])})
+        return self.submit([d["url"]], {0: dict(product=d.get("product", ""), caption=d.get("caption", ""), segments=d["segments"],
+                                                mode=d.get("mode"), source_language=d.get("source_language", ""), original_text=d.get("original_text", ""))})
 
     def clear_finished(self):
         with self._lock:
@@ -180,33 +183,63 @@ def process(job, workdir):
     if cancel():
         raise media.Cancelled()
 
-    # 3) script, puis voix ; on réécrit le script tant que la durée est trop éloignée de la vidéo
+    # 2b) y a-t-il quelqu'un qui parle ? alors on traduit et on double en français
+    transcript, dub_script = None, None
+    if job.script and job.script.get("mode") == "dub":
+        dub_script = job.script
+    elif not job.script and s.get("dub_mode", "auto") != "off" and info["has_audio"]:
+        job.set_stage("listen", 0, "Écoute de la vidéo (la première fois, le modèle de reconnaissance vocale se télécharge)…")
+        try:
+            transcript = stt.transcribe(src, workdir / "stt", s.get("stt_model", "small"))
+        except Exception as e:
+            raise RuntimeError("Impossible d'écouter la vidéo : " + str(e)[:200] +
+                               " (tu peux choisir « Toujours écrire un script vendeur » dans Réglages.)")
+        job.set_stage("listen", 1)
+    dub = bool(dub_script) or stt.is_speech(transcript)
+
     def on_wait(waiting):
         job.waiting = waiting
         if waiting:
-            job.set_stage("script", 0.3, "En attente du script de Claude…")
+            job.set_stage("script", 0.3, "En attente de la traduction de Claude…" if dub else "En attente du script de Claude…")
 
     ctx = dict(job_id=job.id, on_wait=on_wait, should_cancel=cancel, sheet=str(workdir / "frames" / "planche.jpg"))
-    job.set_stage("script", 0)
-    if job.script:                                       # montage refait : le script existe déjà
-        script = scriptgen.normalize(job.script)
+    fit = None
+    if dub:
+        # 3a) doublage : traduction phrase par phrase, voix française posée à l'instant où la phrase était dite
+        job.set_stage("script", 0, f"Traduction en français ({(transcript or {}).get('language', '?')} → fr)")
+        script = dub_script or scriptgen.translate_dub(transcript, frames, meta, D, s, ctx)
+        job.set_stage("script", 1, "Traduction prête")
+        items = [dict(text=x["text"], start=x["start"], end=x.get("end"), gesture=x["gesture"])
+                 for x in script["segments"] if x.get("start") is not None]
+        if s.get("dub_cta", True):
+            items.append(dict(text=config.CTA_TEXT, start=None, end=None, gesture="basket"))
+        job.set_stage("voice", 0, "Génération de la voix française")
+        vinfo = voice.build_anchored(items, D, s["voice"], s["voice_rate"], workdir / "voice0", cancel,
+                                     lambda p: job.set_stage("voice", p))
+        fit = voice.fit_plan_dub(vinfo["duration"], D)
+        script = dict(script, segments=items, mode="dub")
     else:
-        script = scriptgen.generate(frames, meta, D, s, ctx)
-    job.set_stage("script", 1, "Script écrit")
-    vinfo = None
-    for attempt in range(3):
-        job.set_stage("voice", 0, "Génération de la voix off" + (f" (essai {attempt + 1})" if attempt else ""))
-        vinfo = voice.build(script["segments"], s["voice"], s["voice_rate"], workdir / f"voice{attempt}", cancel,
-                            lambda p: job.set_stage("voice", p))
-        words = sum(scriptgen.count_words(x["text"]) for x in script["segments"])
-        if attempt == 0:
-            measured = words / vinfo["duration"]
-            config.save_settings({"wps": round(0.5 * float(s.get("wps", 3.7)) + 0.5 * measured, 3)})
-        ratio = vinfo["duration"] / D
-        if 0.92 <= ratio <= 1.06 or attempt == 2:
-            break
-        job.set_stage("fit", 0.5, f"Ajustement du script ({vinfo['duration']:.0f} s → {D:.0f} s)")
-        script = scriptgen.adjust(script, vinfo["duration"], D, s, ctx)
+        # 3b) script vendeur ; on réécrit le script tant que la durée est trop éloignée de la vidéo
+        job.set_stage("script", 0)
+        if job.script:                                       # montage refait : le script existe déjà
+            script = scriptgen.normalize(job.script)
+        else:
+            script = scriptgen.generate(frames, meta, D, s, ctx)
+        job.set_stage("script", 1, "Script écrit")
+        vinfo = None
+        for attempt in range(3):
+            job.set_stage("voice", 0, "Génération de la voix off" + (f" (essai {attempt + 1})" if attempt else ""))
+            vinfo = voice.build(script["segments"], s["voice"], s["voice_rate"], workdir / f"voice{attempt}", cancel,
+                                lambda p: job.set_stage("voice", p))
+            words = sum(scriptgen.count_words(x["text"]) for x in script["segments"])
+            if attempt == 0:
+                measured = words / vinfo["duration"]
+                config.save_settings({"wps": round(0.5 * float(s.get("wps", 3.7)) + 0.5 * measured, 3)})
+            ratio = vinfo["duration"] / D
+            if 0.92 <= ratio <= 1.06 or attempt == 2:
+                break
+            job.set_stage("fit", 0.5, f"Ajustement du script ({vinfo['duration']:.0f} s → {D:.0f} s)")
+            script = scriptgen.adjust(script, vinfo["duration"], D, s, ctx)
     if cancel():
         raise media.Cancelled()
 
@@ -216,7 +249,7 @@ def process(job, workdir):
     name = f"{stamp}_{job.index:02d}_{job.id}"
     out = config.OUTPUTS / f"{name}.mp4"
     res = compose.compose(src, vinfo, script["segments"], out, workdir, s, seed=int(job.id, 16) % 10_000,
-                          on_progress=lambda p: job.set_stage("render", p), should_cancel=cancel)
+                          on_progress=lambda p: job.set_stage("render", p), should_cancel=cancel, fit=fit)
 
     # 5) fin
     job.set_stage("final", 0)
@@ -228,6 +261,8 @@ def process(job, workdir):
         script=full_text, segments=script["segments"], duration=round(res["duration"], 2),
         source_duration=round(res["source_duration"], 2), voice_speed=round(res["atempo"], 3),
         video_speed=round(1 / res["video_factor"], 3), created=datetime.now().isoformat(timespec="seconds"),
+        mode="dub" if dub else "sales", source_language=((transcript or {}).get("language") if dub and transcript else (job.script or {}).get("source_language", "")) or "",
+        original_text=" ".join(x["text"] for x in (transcript or {}).get("segments", [])) or (job.script or {}).get("original_text", ""),
     )
     (config.OUTPUTS / f"{name}.json").write_text(json.dumps(record, ensure_ascii=False, indent=1))
     job.result = record

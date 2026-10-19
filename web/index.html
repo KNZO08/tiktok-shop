@@ -169,6 +169,18 @@
         </fieldset>
 
         <fieldset>
+          <legend>Vidéos où l'on parle</legend>
+          <label class="field">Que faire quand quelqu'un parle dans la vidéo d'origine ?
+            <select id="dubMode">
+              <option value="auto">Traduire en français et doubler (recommandé)</option>
+              <option value="off">Toujours écrire un script vendeur</option>
+            </select>
+          </label>
+          <label class="switch"><input type="checkbox" id="dubCta"><span></span> Ajouter « Si tu veux commander… » à la fin du doublage</label>
+          <p class="muted small">La voix d'origine est coupée et remplacée par la voix française, calée sur la durée de la vidéo (accélérée ou ralentie un peu si besoin). La première fois, un modèle de reconnaissance vocale (~500 Mo, gratuit) est téléchargé.</p>
+        </fieldset>
+
+        <fieldset>
           <legend>Légende TikTok</legend>
           <label class="field">Hashtags par défaut <span class="muted">(si la vidéo n'a pas de légende)</span>
             <input type="text" id="hashtags" spellcheck="false">

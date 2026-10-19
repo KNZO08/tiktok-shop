@@ -231,3 +231,5 @@ legend { font-weight: 700; font-size: 15px; padding: 0; margin-bottom: 6px; }
 @media (max-width: 700px) { .post-body { grid-template-columns: 1fr; } }
 
 .small-btn { padding: 8px 12px; font-size: 13px; border-radius: 10px; }
+
+.meta .dubchip { background: color-mix(in srgb, var(--accent-2) 22%, var(--surface-2)); color: var(--text); font-weight: 600; }

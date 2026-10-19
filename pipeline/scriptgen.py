@@ -70,14 +70,14 @@ def _client(settings):
     return anthropic.Anthropic(api_key=key, max_retries=3, timeout=180)
 
 
-def _call(client, model, content, settings, system=SYSTEM):
+def _call(client, model, content, settings, system=SYSTEM, schema=None):
     import anthropic
     kwargs = dict(
         model=model,
         max_tokens=16000,
         system=system,
         messages=[{"role": "user", "content": content}],
-        output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
+        output_config={"format": {"type": "json_schema", "schema": schema or SCHEMA}},
     )
     if re.match(r"claude-(opus|sonnet|fable)-5", model):
         kwargs["output_config"]["effort"] = "medium"
@@ -229,3 +229,97 @@ def demo_script(meta, words):
         out.append({"text": t, "gesture": g})
         n += count_words(t)
     return {"product": (meta.get("title") or "Produit")[:40], "caption": ((meta.get("description") or meta.get("title") or "Produit") + " 🔥")[:200], "segments": out}
+
+
+# ------------------------------------------------------------------------------------
+#  Doublage : traduire en français ce qui est dit dans la vidéo
+# ------------------------------------------------------------------------------------
+DUB_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "product": {"type": "string"},
+        "caption": {"type": "string"},
+        "segments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"id": {"type": "integer"}, "text": {"type": "string"},
+                               "gesture": {"type": "string", "enum": GESTURE_ENUM}},
+                "required": ["id", "text", "gesture"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["product", "caption", "segments"],
+    "additionalProperties": False,
+}
+
+DUB_SYSTEM = """Tu es traducteur-doubleur pour des vidéos TikTok Shop. On te donne ce que disent les personnes dans la vidéo (reconnaissance vocale, avec l'instant de chaque phrase) ; tu écris la version française qui sera dite à voix haute à leur place.
+
+Règles :
+- Français parlé, naturel, énergique, comme un vrai créateur TikTok ; tutoiement si la personne s'adresse au public.
+- Fidèle au sens et au ton : n'invente rien (ni prix, ni promo, ni garantie, ni chiffre, ni promesse de santé), ne retire pas d'information importante. Corrige les erreurs évidentes de la reconnaissance vocale grâce aux captures et à la légende.
+- Une phrase traduite par segment, avec le même « id ». Chaque phrase doit pouvoir être DITE dans le temps du segment : respecte « max_words » (raccourcis en gardant l'essentiel si le français est plus long).
+- Écris pour être lu à voix haute : pas d'emoji, pas de hashtag, pas de parenthèses ; nombres et « € » en toutes lettres.
+- À chaque segment, choisis le geste du personnage qui colle au sens :
+""" + "\n".join(f"    • {g} : {GESTURE_HELP[g]}" for g in GESTURE_ENUM if g != "basket") + """
+- N'utilise jamais le geste « basket » (réservé à l'appel à l'achat final, ajouté ailleurs). Varie les gestes.
+- « caption » = la description du post TikTok, EN FRANÇAIS : traduis la légende d'origine (garde le ton, les emojis et les hashtags d'origine ; traduis les hashtags qui ont un sens clair, garde les autres tels quels).
+- « product » = nom court du produit tel que tu le comprends."""
+
+
+def dub_slots(transcript, wps):
+    """Segments de la reconnaissance vocale -> places de doublage (avec un nombre de mots maximum)."""
+    out = []
+    for i, sg in enumerate(transcript["segments"]):
+        dur = max(0.6, sg["end"] - sg["start"])
+        out.append(dict(id=i, start=sg["start"], end=sg["end"], text=sg["text"], max_words=max(2, round(dur * wps * 0.95))))
+    return out
+
+
+def translate_dub(transcript, frames, meta, duration, settings, ctx=None):
+    """-> {product, caption, segments:[{text, gesture, start, end}]} ; chaque segment garde son instant d'origine."""
+    wps = float(settings.get("wps", 3.7))
+    slots = dub_slots(transcript, wps)
+    caption = (meta.get("description") or meta.get("title") or "")[:600]
+    if os.environ.get("TSG_DEMO"):
+        reply = {"product": (meta.get("title") or "Produit")[:40], "caption": caption,
+                 "segments": [dict(id=sl["id"], text=("Traduction de test : " + sl["text"])[:80], gesture="talk") for sl in slots]}
+    elif not use_api(settings):
+        ctx = ctx or {}
+        sheet = Path(frames[0][1]).parent / "planche.jpg"
+        media.contact_sheet(frames, sheet)
+        reply = inbox.ask(ctx.get("job_id", "manual"), "dub", dict(
+            duration=duration, language=transcript["language"], segments=slots, wps=wps,
+            original_caption=caption, caption=caption, sheet=str(sheet), rules=DUB_SYSTEM,
+            extra_instructions=(settings.get("extra_instructions") or "")[:600],
+        ), ctx.get("on_wait"), ctx.get("should_cancel"))
+    else:
+        client = _client(settings)
+        intro = (f"Vidéo produit TikTok Shop de {duration:.0f} secondes. Langue parlée détectée : {transcript['language']}.\n"
+                 f"Légende d'origine : « {caption or '(aucune)'} »\n\nVoici les phrases dites (JSON) :\n"
+                 + json.dumps(slots, ensure_ascii=False) + "\n\nÉcris la version française, une phrase par segment.")
+        if settings.get("extra_instructions"):
+            intro += "\n\nConsignes supplémentaires du vendeur : " + settings["extra_instructions"][:600]
+        content = [{"type": "text", "text": intro}] + _image_blocks(frames)
+        reply = _call(client, settings["model"], content, settings, system=DUB_SYSTEM, schema=DUB_SCHEMA)
+    return normalize_dub(reply, slots)
+
+
+def normalize_dub(reply, slots):
+    by_id = {}
+    for sg in reply.get("segments", []):
+        try:
+            by_id[int(sg["id"])] = sg
+        except (KeyError, TypeError, ValueError):
+            continue
+    segs = []
+    for sl in slots:
+        sg = by_id.get(sl["id"])
+        text = re.sub(r"\s+", " ", (sg or {}).get("text", "")).strip()
+        if not text:
+            raise RuntimeError(f"La traduction est incomplète (phrase {sl['id'] + 1} manquante).")
+        g = (sg or {}).get("gesture")
+        segs.append(dict(text=text, gesture=g if g in GESTURES and g != "basket" else "talk", start=sl["start"], end=sl["end"]))
+    return {"product": (reply.get("product") or "").strip(), "caption": (reply.get("caption") or "").strip(),
+            "mode": "dub", "segments": segs}

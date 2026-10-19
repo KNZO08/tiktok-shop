@@ -75,9 +75,11 @@ def main():
             print("Consignes du vendeur :", d["extra_instructions"])
         print("Planche de captures :", d.get("sheet"))
         if d["kind"] == "dub":
-            print(f"DOUBLAGE : langue d'origine = {d['language']} ; traduis chaque phrase en français (même id, max_words à respecter) :")
+            print(f"DOUBLAGE : langue d'origine = {d['language']} ; traduis chaque phrase en français (même id ; vise le nombre de mots indiqué : la voix doit remplir le temps SANS blanc) :")
             for sl in d["segments"]:
-                print(f"  [{sl['id']}] {sl['start']:.1f}-{sl['end']:.1f}s (max {sl['max_words']} mots) : {sl['text']}")
+                print(f"  [{sl['id']}] {sl['start']:.1f}-{sl['end']:.1f}s (vise {sl['target_words']} mots) : {sl['text']}")
+        if d["kind"] == "adjust" and d.get("dub"):
+            print("(doublage : garde le sens fidèle à la vidéo d'origine ; réponds avec product, caption, segments[{text,gesture}] ; pas d'appel à l'achat, il est ajouté ensuite)")
         if d["kind"] == "adjust":
             print(f"AJUSTEMENT : la voix dure {d['measured']:.1f}s, il faut {d['duration']:.1f}s ; script actuel ({d['words_now']} mots -> ~{d['target_words']}) :")
             print(json.dumps(d["previous"], ensure_ascii=False))

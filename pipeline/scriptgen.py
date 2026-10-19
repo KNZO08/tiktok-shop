@@ -157,28 +157,30 @@ def generate(frames, meta, duration, settings, ctx=None):
     return normalize(_call(client, settings["model"], content, settings))
 
 
-def adjust(script, measured, target, settings, ctx=None):
+def adjust(script, measured, target, settings, ctx=None, dub=False, cta=True):
     """Réécrit le script pour que la voix dure `target` secondes (elle dure `measured`)."""
     words_now = sum(count_words(s["text"]) for s in script["segments"])
     words_new = max(8, round(words_now * target / measured))
     if os.environ.get("TSG_DEMO"):
-        return normalize(demo_script({"title": script.get("product", "")}, words_new))
+        return normalize(demo_script({"title": script.get("product", "")}, words_new), cta=cta)
     if not use_api(settings):
         ctx = ctx or {}
         reply = inbox.ask(ctx.get("job_id", "manual"), "adjust", dict(
             duration=target, measured=measured, words_now=words_now, target_words=words_new, previous=script,
-            caption="", sheet=ctx.get("sheet", ""), rules=SYSTEM,
+            caption="", sheet=ctx.get("sheet", ""), rules=DUB_SYSTEM if dub else SYSTEM, dub=dub,
         ), ctx.get("on_wait"), ctx.get("should_cancel"))
-        return normalize(reply)
+        return normalize(dict(reply, caption=reply.get("caption") or script.get("caption", "")), cta=cta)
     client = _client(settings)
     verb = "raccourcis" if measured > target else "allonge"
     content = [{"type": "text", "text": (
         f"Voici le script actuel (JSON) :\n{json.dumps(script, ensure_ascii=False)}\n\n"
         f"Lu à voix haute, il dure {measured:.1f} s alors qu'il doit durer {target:.1f} s. "
         f"Il fait {words_now} mots : {verb}-le pour arriver à environ {words_new} mots. "
-        "Garde le même produit, le même ton, la structure et la phrase finale identique."
+        + ("Garde la traduction fidèle au sens de la vidéo d'origine (n'invente rien), sans blanc ni remplissage inutile ; n'écris pas l'appel à l'achat final, il est ajouté ensuite."
+           if dub else "Garde le même produit, le même ton, la structure et la phrase finale identique.")
     )}]
-    return normalize(_call(client, settings["model"], content, settings))
+    out = _call(client, settings["model"], content, settings, system=DUB_ADJUST_SYSTEM if dub else SYSTEM)
+    return normalize(dict(out, caption=out.get("caption") or script.get("caption", "")), cta=cta)
 
 
 # ------------------------------------------------------------------------------------
@@ -187,7 +189,7 @@ def _split_sentences(text):
     return [p.strip() for p in parts if p.strip()]
 
 
-def normalize(script):
+def normalize(script, cta=True):
     """Nettoie : une phrase par segment, phrase finale exacte, gestes valides."""
     segs = []
     for s in script.get("segments", []):
@@ -197,15 +199,17 @@ def normalize(script):
             if sent:
                 segs.append({"text": sent, "gesture": g})
     # la phrase finale
-    segs = [s for s in segs if "panier orange" not in s["text"].lower()]
+    if cta:
+        segs = [s for s in segs if "panier orange" not in s["text"].lower()]
     for s in segs:
         if s["gesture"] == "basket":
             s["gesture"] = "emphasis"
-    segs.append({"text": CTA_TEXT, "gesture": "basket"})
+    if cta:
+        segs.append({"text": CTA_TEXT, "gesture": "basket"})
     # fusionne les segments trop courts
     merged = []
     for s in segs:
-        if merged and count_words(s["text"]) < 3 and s["gesture"] != "basket":
+        if merged and count_words(s["text"]) < 3 and s["gesture"] != "basket" and merged[-1]["gesture"] != "basket":
             merged[-1]["text"] += " " + s["text"]
         else:
             merged.append(s)
@@ -259,7 +263,8 @@ DUB_SYSTEM = """Tu es traducteur-doubleur pour des vidéos TikTok Shop. On te do
 Règles :
 - Français parlé, naturel, énergique, comme un vrai créateur TikTok ; tutoiement si la personne s'adresse au public.
 - Fidèle au sens et au ton : n'invente rien (ni prix, ni promo, ni garantie, ni chiffre, ni promesse de santé), ne retire pas d'information importante. Corrige les erreurs évidentes de la reconnaissance vocale grâce aux captures et à la légende.
-- Une phrase traduite par segment, avec le même « id ». Chaque phrase doit pouvoir être DITE dans le temps du segment : respecte « max_words » (raccourcis en gardant l'essentiel si le français est plus long).
+- Une phrase COMPLÈTE traduite par segment, avec le même « id » (pas de phrase coupée au milieu : si l'original coupe une phrase entre deux segments, reformule pour que chaque segment soit une phrase entière).
+- La voix doit REMPLIR le temps sans blanc : vise « target_words » mots par segment (ni beaucoup moins, sinon il y aura des silences, ni plus, sinon elle ira trop vite). Si le français est plus court, développe un peu en restant fidèle (reformulation, précision utile), n'invente aucun fait.
 - Écris pour être lu à voix haute : pas d'emoji, pas de hashtag, pas de parenthèses ; nombres et « € » en toutes lettres.
 - À chaque segment, choisis le geste du personnage qui colle au sens :
 """ + "\n".join(f"    • {g} : {GESTURE_HELP[g]}" for g in GESTURE_ENUM if g != "basket") + """
@@ -268,19 +273,20 @@ Règles :
 - « product » = nom court du produit tel que tu le comprends."""
 
 
-def dub_slots(transcript, wps):
-    """Segments de la reconnaissance vocale -> places de doublage (avec un nombre de mots maximum)."""
+def dub_slots(transcript, wps, duration, cta):
+    """Phrases dites -> places de doublage, avec le nombre de mots à viser pour que la voix remplisse la vidéo sans blanc."""
+    scale = max(0.6, (duration - (3.4 if cta else 0.0)) / max(duration, 1.0))
     out = []
     for i, sg in enumerate(transcript["segments"]):
         dur = max(0.6, sg["end"] - sg["start"])
-        out.append(dict(id=i, start=sg["start"], end=sg["end"], text=sg["text"], max_words=max(2, round(dur * wps * 0.95))))
+        out.append(dict(id=i, start=sg["start"], end=sg["end"], text=sg["text"], target_words=max(2, round(dur * wps * scale))))
     return out
 
 
 def translate_dub(transcript, frames, meta, duration, settings, ctx=None):
     """-> {product, caption, segments:[{text, gesture, start, end}]} ; chaque segment garde son instant d'origine."""
     wps = float(settings.get("wps", 3.7))
-    slots = dub_slots(transcript, wps)
+    slots = dub_slots(transcript, wps, duration, settings.get("dub_cta", True))
     caption = (meta.get("description") or meta.get("title") or "")[:600]
     if os.environ.get("TSG_DEMO"):
         reply = {"product": (meta.get("title") or "Produit")[:40], "caption": caption,
@@ -323,3 +329,7 @@ def normalize_dub(reply, slots):
         segs.append(dict(text=text, gesture=g if g in GESTURES and g != "basket" else "talk", start=sl["start"], end=sl["end"]))
     return {"product": (reply.get("product") or "").strip(), "caption": (reply.get("caption") or "").strip(),
             "mode": "dub", "segments": segs}
+
+
+DUB_ADJUST_SYSTEM = """Tu ajustes la longueur d'une traduction française destinée à être dite à voix haute à la place des paroles d'une vidéo.
+Garde exactement le sens de l'original (n'invente aucun fait, prix, promesse), en français parlé naturel, une phrase complète par segment, sans emoji ni hashtag. Pour rallonger : reformule et précise ce qui est dit, sans remplissage vide. Pour raccourcir : garde l'essentiel. Réponds avec le JSON demandé (product, caption, segments avec text et gesture)."""

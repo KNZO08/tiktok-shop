@@ -8,10 +8,10 @@ import numpy as np
 from . import media
 
 SR = 44100
-GAP = 0.07          # pause entre deux phrases (s)
+GAP = 0.03          # pause entre deux phrases (s)
 SILENCE_CUT = (
     "silenceremove=start_periods=1:start_threshold=-42dB:start_silence=0.02"
-    ":stop_periods=-1:stop_duration=0.14:stop_threshold=-42dB:stop_silence=0.07"
+    ":stop_periods=-1:stop_duration=0.14:stop_threshold=-42dB:stop_silence=0.04"
 )
 
 # Microsoft a déplacé le service de voix (octobre 2026) : le nouvel hôte marche partout, l'ancien seulement dans certains pays.
@@ -112,76 +112,6 @@ def build(segments, voice, rate, workdir, should_cancel=None, on_progress=None):
     out = workdir / "voice_raw.wav"
     _write_wav(out, np.concatenate(chunks))
     return dict(path=out, duration=t, times=times)
-
-
-def _fit_to_slot(wav_path, slot, max_speed=1.18):
-    """Accélère un peu une phrase qui dépasse sa place (jamais plus de max_speed). Renvoie le tableau audio."""
-    x = _read_wav(wav_path)
-    dur = len(x) / SR
-    if slot > 0.4 and dur > slot * 1.03:
-        speed = min(dur / slot, max_speed)
-        out = Path(wav_path).with_name(Path(wav_path).stem + "_fit.wav")
-        media.run(["-i", wav_path, "-af", f"atempo={speed:.4f}", "-ar", SR, "-ac", 1, "-c:a", "pcm_s16le", out])
-        x = _read_wav(out)
-    return x
-
-
-def build_anchored(items, video_dur, voice, rate, workdir, should_cancel=None, on_progress=None):
-    """Doublage : chaque phrase est placée à l'instant où elle était dite dans la vidéo d'origine.
-
-    items : [{text, start}] ; start=None -> juste après la phrase précédente (appel à l'achat final).
-    -> dict(path, duration, times=[(début, fin)…])
-    """
-    workdir = Path(workdir)
-    workdir.mkdir(parents=True, exist_ok=True)
-    mp3s = [workdir / f"seg_{i:02d}.mp3" for i in range(len(items))]
-    asyncio.run(_all([it["text"] for it in items], voice, rate, mp3s))
-    arrays = []
-    for i, mp3 in enumerate(mp3s):
-        if should_cancel and should_cancel():
-            raise media.Cancelled()
-        wav = workdir / f"seg_{i:02d}.wav"
-        media.run(["-i", mp3, "-af", SILENCE_CUT, "-ar", SR, "-ac", 1, "-c:a", "pcm_s16le", wav])
-        # place disponible : jusqu'au début de la phrase suivante (ou la fin de la vidéo)
-        nxt = next((it["start"] for it in items[i + 1:] if it.get("start") is not None), None)
-        st = items[i].get("start")
-        slot = ((nxt if nxt is not None else video_dur) - (st if st is not None else 0)) - 0.08 if st is not None else 0
-        x = _fit_to_slot(wav, slot) if st is not None and nxt is not None else _read_wav(wav)
-        if len(x) < SR * 0.15:
-            raise RuntimeError("Une phrase de la voix off est vide, réessaie.")
-        fade = int(0.006 * SR)
-        x = x.copy()
-        x[:fade] *= np.linspace(0, 1, fade, dtype=np.float32)
-        x[-fade:] *= np.linspace(1, 0, fade, dtype=np.float32)
-        arrays.append(x)
-        if on_progress:
-            on_progress((i + 1) / len(mp3s))
-    cursor, times = 0.0, []
-    for it, x in zip(items, arrays):
-        start = max(it["start"], cursor + GAP) if it.get("start") is not None else cursor + 0.30
-        end = start + len(x) / SR
-        times.append((start, end))
-        cursor = end
-    total = np.zeros(int(cursor * SR) + 1, np.float32)
-    for (st, _), x in zip(times, arrays):
-        i0 = int(st * SR)
-        total[i0:i0 + len(x)] += x
-    out = workdir / "voice_raw.wav"
-    _write_wav(out, total)
-    return dict(path=out, duration=cursor, times=times)
-
-
-def fit_plan_dub(voice_dur, video_dur, a_max=1.12, k_max=1.12):
-    """Doublage : la voix suit la vidéo. Trop longue -> on l'accélère un peu, puis on ralentit la vidéo,
-    puis la dernière image est figée pour le reste. Trop courte -> on laisse la vidéo telle quelle."""
-    if voice_dur <= video_dur:
-        return dict(atempo=1.0, final=video_dur, video_factor=1.0)
-    a = min(voice_dur / video_dur, a_max)
-    v2 = voice_dur / a
-    if v2 <= video_dur:
-        return dict(atempo=a, final=video_dur, video_factor=1.0)
-    k = min(v2 / video_dur, k_max)
-    return dict(atempo=a, final=max(video_dur * k, v2), video_factor=k)
 
 
 def fit_plan(voice_dur, video_dur, a_min=0.93, a_max=1.10):

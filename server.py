@@ -151,6 +151,11 @@ class Handler(BaseHTTPRequestHandler):
             if m[2] == "cancel":
                 return self._json({"ok": MANAGER.cancel(m[1])})
             return self._json({"jobs": MANAGER.retry(m[1])})
+        if p == "/api/rerender":
+            try:
+                return self._json({"jobs": MANAGER.rerender(Path(body.get("name", "")).name)})
+            except Exception:
+                return self._json({"error": "Vidéo introuvable."}, 404)
         if p == "/api/jobs/clear":
             MANAGER.clear_finished()
             return self._json({"ok": True})

@@ -198,7 +198,7 @@ function updateCard(c, j) {
     c.actions.append(
       el("a", { class: "btn primary", href: `/outputs/${r.file}`, download: r.file, text: "Télécharger" }),
       el("button", { class: "btn ghost", type: "button", text: "Voir dans le Finder", onclick: () => api("/api/reveal", { method: "POST", body: { name: r.file } }) }),
-      el("button", { class: "btn ghost", type: "button", text: "Régénérer", onclick: async () => { await api(`/api/jobs/${j.id}/retry`, { method: "POST" }); refresh(); } }));
+      el("button", { class: "btn ghost", type: "button", text: "Refaire le montage", title: "Même lien, même script, animation recalculée", onclick: async () => { await api(`/api/jobs/${j.id}/retry`, { method: "POST" }); refresh(); } }));
   }
 }
 
@@ -343,6 +343,11 @@ function init() {
 
   $("#viewerClose").onclick = () => $("#viewer").close();
   $("#viewer").addEventListener("close", () => { $("#viewerVideo").pause(); });
+  $("#viewerRerender").onclick = async () => {
+    if (!viewerName) return;
+    await api("/api/rerender", { method: "POST", body: { name: viewerName } });
+    $("#viewer").close(); refresh(); $("#progress").scrollIntoView({ behavior: "smooth" });
+  };
   $("#viewerReveal").onclick = () => viewerName && api("/api/reveal", { method: "POST", body: { name: viewerName + ".mp4" } });
   $("#viewerDelete").onclick = async () => {
     if (!viewerName || !confirm("Supprimer définitivement cette vidéo ?")) return;

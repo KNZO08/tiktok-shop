@@ -188,6 +188,8 @@ def main():
     # cercles de coude (sous les pièces) : couleur de manche + contour
     ys_, xs_ = np.nonzero(solid)
     rig["rest_bbox"] = [int(xs_.min()), int(ys_.min()), int(xs_.max()) + 1, int(ys_.max()) + 1]
+    from . import prepare_face
+    rig["face"] = prepare_face.build(OUT, head)
     rig["layers"] = layers
     rig["sleeve_fill"] = [43, 43, 43]
     rig["sleeve_line"] = [10, 10, 10]
@@ -215,9 +217,9 @@ def main():
 
 def make_preview():
     """Image du personnage au repos pour l'aperçu des réglages."""
-    from .character import CANVAS_SRC, Character, GESTURES
+    from .character import CANVAS_SRC, POSES, Character
     ch = Character(1.0)
-    g = GESTURES["idle"]
+    g = POSES["hang"]
     pose = dict(body=dict(dx=0, dy=0, rot=0, sx=1, sy=1), head=dict(dx=0, dy=0, rot=0), mouth=0.0, blink=0.0,
                 armL=list(g["L"]), armR=list(g["R"]), fade_rows=60)
     img = ch.render(pose)

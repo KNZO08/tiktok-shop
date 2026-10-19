@@ -23,7 +23,8 @@ STAGES = {
 
 
 class Job:
-    def __init__(self, index, url):
+    def __init__(self, index, url, script=None):
+        self.script = script            # script déjà écrit (refaire le montage sans redemander de script)
         self.id = uuid.uuid4().hex[:8]
         self.index = index
         self.url = url.strip()
@@ -59,7 +60,7 @@ class Manager:
         config.OUTPUTS.mkdir(exist_ok=True)
 
     # -- API
-    def submit(self, urls):
+    def submit(self, urls, scripts=None):
         s = config.load_settings()
         if int(s["concurrency"]) != self._conc:
             self._conc = max(1, int(s["concurrency"]))
@@ -70,7 +71,7 @@ class Manager:
             for i, u in enumerate(urls):
                 if not u.strip():
                     continue
-                job = Job(base + i + 1, u)
+                job = Job(base + i + 1, u, (scripts or {}).get(i))
                 self.jobs[job.id] = job
                 self.order.append(job.id)
                 created.append(job)
@@ -93,7 +94,18 @@ class Manager:
         j = self.jobs.get(job_id)
         if not j:
             return []
-        return self.submit([j.url])
+        script = None
+        if j.result and j.result.get("segments"):          # montage terminé : on le refait avec le même script
+            script = dict(product=j.result.get("product", ""), segments=j.result["segments"])
+        elif j.script:
+            script = j.script
+        return self.submit([j.url], {0: script} if script else None)
+
+    def rerender(self, name):
+        """Refait le montage d'une vidéo de l'historique (même lien, même script, nouvelle animation)."""
+        f = config.OUTPUTS / (name.rsplit(".", 1)[0] + ".json")
+        d = json.loads(f.read_text())
+        return self.submit([d["url"]], {0: dict(product=d.get("product", ""), segments=d["segments"])})
 
     def clear_finished(self):
         with self._lock:
@@ -176,7 +188,10 @@ def process(job, workdir):
 
     ctx = dict(job_id=job.id, on_wait=on_wait, should_cancel=cancel, sheet=str(workdir / "frames" / "planche.jpg"))
     job.set_stage("script", 0)
-    script = scriptgen.generate(frames, meta, D, s, ctx)
+    if job.script:                                       # montage refait : le script existe déjà
+        script = scriptgen.normalize(job.script)
+    else:
+        script = scriptgen.generate(frames, meta, D, s, ctx)
     job.set_stage("script", 1, "Script écrit")
     vinfo = None
     for attempt in range(3):

@@ -43,9 +43,9 @@ def compose(video_path, voice_info, segments, out_path, workdir, settings, seed=
 
     # 2) animation calée sur la voix
     n = int(round(Tf * FPS))
-    env = voicemod.envelope(voice_fit, FPS, n)
+    env, wide = voicemod.features(voice_fit, FPS, n)
     segs = [dict(start=s / a, end=e / a, gesture=g["gesture"]) for (s, e), g in zip(voice_info["times"], segments)]
-    anim = Animator(Tf, env, segs, FPS, seed)
+    anim = Animator(Tf, env, segs, FPS, seed, wide=wide)
     bx0, by0, bx1, by1 = rest_bbox()
     scale = (layout["height_pct"] / 100.0 * OUT_H) / (by1 - by0)
     char = Character(scale)

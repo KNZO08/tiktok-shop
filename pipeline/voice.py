@@ -107,19 +107,35 @@ def fit_plan(voice_dur, video_dur, a_min=0.93, a_max=1.10):
     return dict(atempo=a, final=final, video_factor=k)
 
 
-def envelope(wav_path, fps=30, n_frames=None):
-    """Volume de la voix image par image, 0..1 (sert à ouvrir la bouche)."""
+def features(wav_path, fps=30, n_frames=None):
+    """Par image : volume de la voix (0..1, ouvre la bouche) et « largeur » de la voyelle (-1 « ou » … +1 « i »)."""
     x = _read_wav(wav_path)
     hop = SR / fps
     n = n_frames or int(np.ceil(len(x) / hop))
     rms = np.zeros(n)
+    cent = np.zeros(n)
+    win = np.hanning(int(hop)).astype(np.float32)
+    freqs = np.fft.rfftfreq(len(win), 1.0 / SR)
+    band = (freqs > 200) & (freqs < 5000)
     for i in range(n):
         seg = x[int(i * hop): int((i + 1) * hop)]
-        rms[i] = np.sqrt(np.mean(seg ** 2)) if len(seg) else 0.0
+        if len(seg) < len(win):
+            continue
+        rms[i] = np.sqrt(np.mean(seg ** 2))
+        if rms[i] > 0.01:
+            mag = np.abs(np.fft.rfft(seg[: len(win)] * win))[band]
+            f = freqs[band]
+            cent[i] = float((mag * f).sum() / (mag.sum() + 1e-9))
     ref = np.percentile(rms[rms > 0.004], 88) if (rms > 0.004).any() else 1.0
     env = np.clip(rms / (ref * 1.05), 0, 1)
     env[rms < 0.006] = 0.0
-    return env
+    wide = np.clip((cent - 1700.0) / 900.0, -1, 1)
+    wide[rms < 0.01] = 0.0
+    return env, wide
+
+
+def envelope(wav_path, fps=30, n_frames=None):
+    return features(wav_path, fps, n_frames)[0]
 
 
 def sample(voice, rate, out):

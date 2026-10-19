@@ -29,8 +29,24 @@ def _use_endpoint(i):
     cm.WSS_URL = _ENDPOINTS[i % len(_ENDPOINTS)]
 
 
+# Mots que la voix lit mal (lettres épelées, prononciation anglaise) -> écriture phonétique, uniquement pour la voix.
+_SPEAK = [
+    (r"\bQi\s?2\b", "tchi deux"), (r"\bQi\b", "tchi"), (r"\bUSB[- ]?C\b", "U S B C"), (r"\bUSB\b", "U S B"),
+    (r"\bLED\b", "lède"), (r"\bWi-?Fi\b", "ouifi"), (r"\bMagSafe\b", "mag séf"), (r"\bBluetooth\b", "blou tousse"),
+    (r"\bHDMI\b", "H D M I"), (r"\bGPS\b", "G P S"), (r"\bAI\b", "A I"), (r"\bTikTok\b", "Tik Tok"),
+]
+
+
+def speak_fix(text):
+    import re
+    for pat, rep in _SPEAK:
+        text = re.sub(pat, rep, text)
+    return text
+
+
 async def _one(text, voice, rate, out, sem):
     import edge_tts
+    text = speak_fix(text)
     last = None
     async with sem:
         for attempt in range(6):

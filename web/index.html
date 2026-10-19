@@ -96,7 +96,7 @@
       <p class="pubstat" id="viewerPub" hidden></p>
       <div class="row wrap-row">
         <a class="btn" id="viewerDl" download>Télécharger</a>
-        <button class="btn primary" id="viewerAssist" type="button" title="Gratuit : ouvre TikTok Studio, copie la légende et montre la vidéo">Publier sur TikTok</button>
+        <button class="btn primary" id="viewerAssist" type="button" title="Affiche un QR code à scanner avec ton téléphone">Poster sur TikTok</button>
         <button class="btn" id="viewerPublish" type="button" title="Envoie la vidéo dans les brouillons de ton appli TikTok (Upload-Post, payant)" hidden>Envoyer en brouillon (Upload-Post)</button>
         <button class="btn ghost" id="viewerCopy" type="button">Copier la légende</button>
         <button class="btn ghost" id="viewerRerender" type="button" title="Même lien, même script, animation recalculée">Refaire le montage</button>
@@ -104,6 +104,34 @@
         <button class="btn ghost danger" id="viewerDelete" type="button">Supprimer</button>
         <button class="btn ghost" id="viewerClose" type="button">Fermer</button>
       </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- POSTER (QR CODE) -->
+<dialog id="postModal" class="modal postm">
+  <div class="modal-head"><h2 id="postTitle">Poster sur TikTok</h2><button class="icon-btn" type="button" id="postClose" aria-label="Fermer">✕</button></div>
+  <div class="post-body">
+    <div class="post-qr">
+      <div class="qr" id="postQr" aria-label="QR code"></div>
+      <p class="small muted center" id="postMode"></p>
+      <button class="btn ghost small-btn" id="postTunnel" type="button" hidden title="Crée un lien sécurisé temporaire (gratuit, Cloudflare) pour que le téléphone propose TikTok dans « Partager »">🔒 Activer l'ouverture directe dans TikTok</button>
+      <p class="small muted center" id="postTunnelMsg" hidden></p>
+    </div>
+    <div class="post-side">
+      <ol class="steps">
+        <li>Scanne le QR code avec l'appareil photo de ton téléphone.</li>
+        <li>Appuie sur <b>« Ouvrir dans TikTok »</b> et choisis TikTok : la vidéo s'ouvre, la légende est déjà copiée.</li>
+        <li>Dans la description, appui long → <b>Coller</b>. Ajoute le panier orange et publie.</li>
+      </ol>
+      <label class="field">Légende (en français, modifiable)
+        <textarea id="postCaption" rows="5"></textarea>
+      </label>
+      <div class="row wrap-row">
+        <button class="btn primary" id="postCopy" type="button">Copier la légende</button>
+        <button class="btn ghost" id="postStudio" type="button" title="Gratuit : ouvre TikTok Studio sur l'ordinateur">Poster depuis l'ordinateur</button>
+      </div>
+      <p class="small muted" id="postHint">Le téléphone doit être sur le même Wi-Fi que l'ordinateur. Si macOS demande d'autoriser les connexions entrantes pour « Python », choisis Autoriser. Le lien expire au bout de 3 heures.</p>
     </div>
   </div>
 </dialog>

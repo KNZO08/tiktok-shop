@@ -201,7 +201,7 @@ function updateCard(c, j) {
     c.extra.append(c.pubEl);
     c.actions.append(
       el("a", { class: "btn", href: `/outputs/${r.file}`, download: r.file, text: "Télécharger" }),
-      el("button", { class: "btn primary", type: "button", text: "Publier sur TikTok", title: "Gratuit : ouvre TikTok Studio, copie la légende et montre la vidéo", onclick: () => assistPublish(r) }),
+      el("button", { class: "btn primary", type: "button", text: "Poster sur TikTok", title: "Affiche un QR code à scanner avec ton téléphone", onclick: () => openPost(r) }),
       ...(state.settings && state.settings.has_uploadpost_key ? [el("button", { class: "btn", type: "button", text: "Envoyer en brouillon (Upload-Post)", onclick: () => publishVideo(r) })] : []),
       el("button", { class: "btn ghost", type: "button", text: "Copier la légende", onclick: e => copyCaption(r, e.currentTarget) }),
       el("button", { class: "btn ghost", type: "button", text: "Voir dans le Finder", onclick: () => api("/api/reveal", { method: "POST", body: { name: r.file } }) }),
@@ -212,6 +212,7 @@ function updateCard(c, j) {
 /* ---------- publication TikTok (brouillons) ---------- */
 const stemOf = r => r.file.replace(/\.mp4$/, "");
 function captionFor(r) {
+  if (r.caption) return r.caption;
   const tags = (state.settings && state.settings.hashtags) || "";
   return `${r.product || "Vidéo"} 🔥 Clique sur le panier orange 🛒 ${tags}`.trim();
 }
@@ -239,6 +240,23 @@ async function publishVideo(r) {
   try { await api("/api/publish", { method: "POST", body: { name: r.file, caption: captionFor(r) } }); }
   catch (e) { alert(e.message); }
   refresh();
+}
+let postRec = null, postToken = null, captionTimer = null;
+async function openPost(r) {
+  postRec = r; postToken = null;
+  $("#postTitle").textContent = `Poster « ${r.product || "la vidéo"} » sur TikTok`;
+  $("#postQr").innerHTML = ""; $("#postMode").textContent = "Création du QR code…";
+  $("#postCaption").value = r.caption || captionFor(r);
+  $("#postModal").showModal();
+  try {
+    const d = await api("/api/share", { method: "POST", body: { name: r.file, caption: $("#postCaption").value } });
+    postToken = d.token;
+    $("#postQr").innerHTML = d.qr;
+    $("#postCaption").value = d.caption;
+    $("#postMode").textContent = d.mode === "public" ? "Lien sécurisé : ouverture directe dans TikTok, même en 4G/5G" : "Téléphone et ordinateur sur le même Wi-Fi";
+    $("#postTunnel").hidden = d.mode === "public";
+    $("#postTunnelMsg").hidden = true;
+  } catch (e) { $("#postMode").textContent = "Impossible de créer le QR code : " + e.message; }
 }
 const accounts = () => (state.settings && state.settings.tiktok_accounts) || [];
 function pickAccount() {
@@ -461,7 +479,32 @@ function init() {
     await api("/api/rerender", { method: "POST", body: { name: viewerName } });
     $("#viewer").close(); refresh(); $("#progress").scrollIntoView({ behavior: "smooth" });
   };
-  $("#viewerAssist").onclick = () => viewerRec && assistPublish(viewerRec);
+  $("#viewerAssist").onclick = () => { if (viewerRec) { const r = viewerRec; $("#viewer").close(); openPost(r); } };
+  $("#postTunnel").onclick = async () => {
+    const msg = $("#postTunnelMsg"), btn = $("#postTunnel");
+    btn.disabled = true; msg.hidden = false; msg.textContent = "Préparation… (la première fois, un petit outil gratuit de Cloudflare est téléchargé)";
+    await api("/api/tunnel/start", { method: "POST" });
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const st = (await api("/api/state")).tunnel || {};
+      msg.textContent = st.message || "…";
+      if (st.state === "up") { btn.disabled = false; if (postRec) openPost(postRec); return; }
+      if (st.state === "error") { btn.disabled = false; return; }
+    }
+    btn.disabled = false;
+  };
+  $("#postClose").onclick = () => $("#postModal").close();
+  $("#postCopy").onclick = async e => {
+    const b = e.currentTarget, t = b.textContent;
+    try { await navigator.clipboard.writeText($("#postCaption").value); } catch (err) { $("#postCaption").select(); document.execCommand("copy"); }
+    b.textContent = "Copiée ✓"; setTimeout(() => { b.textContent = t; }, 1600);
+  };
+  $("#postCaption").addEventListener("input", () => {
+    clearTimeout(captionTimer);
+    captionTimer = setTimeout(() => postToken && api("/api/share/caption", { method: "POST", body: { token: postToken, caption: $("#postCaption").value } }), 400);
+  });
+  $("#postStudio").onclick = () => { if (postRec) { const r = postRec; $("#postModal").close(); assistPublish(r); } };
+  $("#postModal").addEventListener("click", e => { if (e.target === $("#postModal")) $("#postModal").close(); });
   $("#viewerPublish").onclick = () => viewerRec && publishVideo(viewerRec);
   $("#viewerCopy").onclick = e => viewerRec && copyCaption(viewerRec, e.currentTarget);
   $("#viewerReveal").onclick = () => viewerName && api("/api/reveal", { method: "POST", body: { name: viewerName + ".mp4" } });

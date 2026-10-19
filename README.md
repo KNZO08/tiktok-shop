@@ -22,16 +22,20 @@ Laisse la fenêtre noire ouverte tant que tu l'utilises.
 Dans **Réglages**, tu peux coller une clé API Anthropic (facultatif) et choisir la voix, la position du personnage
 (avec un aperçu de l'écran TikTok) et le nombre de vidéos générées en même temps.
 
-## Publier sur TikTok (gratuit, pour chaque compte)
+## Poster sur TikTok depuis le téléphone (QR code)
 
-Bouton **« Publier sur TikTok »** sur chaque vidéo : il copie la légende, ouvre **TikTok Studio** dans le profil Chrome de ton compte
-et montre la vidéo dans le Finder. Tu la glisses dans Studio, tu colles la légende, tu ajoutes le **panier orange** (produit TikTok Shop)
-et tu publies. Aucun abonnement, aucune clé.
+Sur chaque vidéo, bouton **« Poster sur TikTok »** → un **QR code** s'affiche avec la **légende en français** (modifiable, bouton « Copier »).
+Scanne-le avec ton téléphone : la page s'ouvre avec la vidéo, la légende, et un bouton **« Ouvrir dans TikTok »** (la légende est copiée,
+la vidéo part dans TikTok via le menu « Partager »). Dans TikTok : Suivant → appui long dans la description → **Coller** → panier orange → Publier.
 
-Dans **Réglages › Mes comptes TikTok**, ajoute un compte par profil Chrome (connecte-toi à TikTok une fois dans chaque profil) :
-si tu en as plusieurs, le bouton te demande sur lequel publier.
-
-Option payante (envoi automatique dans les brouillons de l'appli TikTok via upload-post.com) : Réglages › « Envoi automatique en brouillon ».
+- **Même Wi-Fi** : marche tout de suite, mais le téléphone ne peut alors que télécharger la vidéo (à importer dans TikTok avec « + »).
+- **Ouverture directe dans TikTok** : bouton « Activer l'ouverture directe dans TikTok » dans la fenêtre du QR code. Il crée un lien sécurisé
+  temporaire (HTTPS, gratuit, via Cloudflare ; l'outil est téléchargé une fois dans `.tools/`). Seule l'adresse secrète de la vidéo est
+  accessible depuis Internet : le reste du dashboard (réglages, clés, vidéos) reste fermé. Les liens expirent après 3 h.
+- La légende est la **traduction française** de la description de la vidéo d'origine (écrite avec le script).
+- **Sur ordinateur** : bouton « Poster depuis l'ordinateur » (ouvre TikTok Studio dans le profil Chrome du compte, copie la légende, montre la vidéo).
+  Réglages › Mes comptes TikTok : un profil Chrome par compte.
+- Option payante : envoi automatique dans les brouillons de l'appli TikTok via upload-post.com (Réglages).
 
 ## Fichiers
 

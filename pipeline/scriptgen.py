@@ -27,6 +27,7 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "product": {"type": "string"},
+        "caption": {"type": "string"},
         "segments": {
             "type": "array",
             "items": {
@@ -37,7 +38,7 @@ SCHEMA = {
             },
         },
     },
-    "required": ["product", "segments"],
+    "required": ["product", "caption", "segments"],
     "additionalProperties": False,
 }
 
@@ -57,6 +58,7 @@ Règles du texte :
 - Chaque segment = UNE phrase. À chaque segment, choisis le geste du personnage qui colle au sens :
 """ + "\n".join(f"    • {g} : {GESTURE_HELP[g]}" for g in GESTURE_ENUM) + """
 - Varie les gestes (pas deux fois le même d'affilée si possible).
+- « caption » = la description du post TikTok, EN FRANÇAIS : traduis fidèlement la légende d'origine (garde le ton, les emojis et les hashtags d'origine ; traduis les hashtags qui ont un sens clair, garde les autres tels quels). Pas de prix inventé.
 - Réponds uniquement avec le JSON demandé : « product » = nom court du produit tel que tu le comprends."""
 
 
@@ -138,7 +140,7 @@ def generate(frames, meta, duration, settings, ctx=None):
         sheet = Path(frames[0][1]).parent / "planche.jpg"
         media.contact_sheet(frames, sheet)
         reply = inbox.ask(ctx.get("job_id", "manual"), "write", dict(
-            duration=duration, target_words=words, wps=wps, caption=caption, extra_instructions=extra,
+            duration=duration, target_words=words, wps=wps, caption=caption, original_caption=(meta.get("description") or meta.get("title") or ""), extra_instructions=extra,
             sheet=str(sheet), frames=[dict(t=t, path=str(p)) for t, p in frames], rules=SYSTEM,
         ), ctx.get("on_wait"), ctx.get("should_cancel"))
         return normalize(reply)
@@ -207,7 +209,7 @@ def normalize(script):
             merged[-1]["text"] += " " + s["text"]
         else:
             merged.append(s)
-    return {"product": (script.get("product") or "").strip(), "segments": merged}
+    return {"product": (script.get("product") or "").strip(), "caption": (script.get("caption") or "").strip(), "segments": merged}
 
 
 def demo_script(meta, words):
@@ -226,4 +228,4 @@ def demo_script(meta, words):
             break
         out.append({"text": t, "gesture": g})
         n += count_words(t)
-    return {"product": (meta.get("title") or "Produit")[:40], "segments": out}
+    return {"product": (meta.get("title") or "Produit")[:40], "caption": ((meta.get("description") or meta.get("title") or "Produit") + " 🔥")[:200], "segments": out}

@@ -232,3 +232,15 @@ legend { font-weight: 700; font-size: 15px; padding: 0; margin-bottom: 6px; }
 .pick-list { display: grid; gap: 8px; }
 .pick-list .btn { justify-content: flex-start; }
 @media (max-width: 520px) { .acc-row { grid-template-columns: 1fr; } }
+
+.modal.postm { width: min(820px, calc(100vw - 24px)); }
+.post-body { display: grid; grid-template-columns: 270px 1fr; gap: 24px; padding: 22px; }
+.post-qr { display: grid; gap: 10px; align-content: start; justify-items: center; }
+.qr { background: #fff; border-radius: 16px; padding: 10px; line-height: 0; box-shadow: var(--shadow); }
+.qr svg { width: 230px; height: 230px; display: block; }
+.center { text-align: center; }
+.post-side { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+@media (max-width: 700px) { .post-body { grid-template-columns: 1fr; } }
+
+.small-btn { padding: 8px 12px; font-size: 13px; border-radius: 10px; }

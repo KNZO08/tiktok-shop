@@ -11,9 +11,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from pipeline import assist, config, jobs, media, publish, voice
+from pipeline import assist, config, jobs, media, publish, share, tunnel, voice
 
 PORT = int(os.environ.get("PORT", 8765))
+HOST = os.environ.get("HOST", "0.0.0.0")      # 0.0.0.0 : le téléphone (même Wi-Fi) peut ouvrir les liens /p/… ; tout le reste reste local
+RUNTIME = {"port": PORT}
 MANAGER = jobs.Manager()
 PUBLISH = {}                     # nom de vidéo -> {state: sending|done|error, message}
 PUBLISH_LOCK = threading.Lock()
@@ -66,8 +68,13 @@ class Handler(BaseHTTPRequestHandler):
             return {}
 
     def _host_ok(self):
+        """Tout sauf les liens de partage /p/… : uniquement cet ordinateur (pas de tunnel, pas de Wi-Fi)."""
         host = (self.headers.get("Host") or "").split(":")[0]
-        return host in ("localhost", "127.0.0.1", "[::1]")
+        if host not in ("localhost", "127.0.0.1", "[::1]"):
+            return False
+        if self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return False
+        return not any(h in self.headers for h in ("X-Forwarded-For", "X-Forwarded-Host", "Cf-Connecting-Ip", "Cf-Ray", "Forwarded"))
 
     def _origin_ok(self):
         o = self.headers.get("Origin")
@@ -122,11 +129,35 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
+    def _share_route(self, p):
+        m = re.fullmatch(r"/p/([A-Za-z0-9_-]{20,40})(?:/(video\.mp4|cover\.jpg))?", p)
+        if not m:
+            return self.send_error(404)
+        entry = share.get(m[1])
+        if not entry:
+            return self.send_error(410, "Ce lien a expiré : régénère le QR code.")
+        stem = entry["stem"]
+        if m[2] == "video.mp4":
+            return self._file(config.OUTPUTS / f"{stem}.mp4")
+        if m[2] == "cover.jpg":
+            return self._file(config.OUTPUTS / f"{stem}.jpg")
+        data = share.page_html(m[1], entry).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Robots-Tag", "noindex")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
+
     def do_GET(self):
-        if not self._host_ok():
-            return self.send_error(403)
         u = urlparse(self.path)
         p = unquote(u.path)
+        if p.startswith("/p/"):
+            return self._share_route(p)
+        if not self._host_ok():
+            return self.send_error(403)
         if p == "/api/state":
             return self._json(dict(
                 jobs=MANAGER.snapshot(),
@@ -134,6 +165,7 @@ class Handler(BaseHTTPRequestHandler):
                 settings=config.public_settings(),
                 ready=ready_state(),
                 publish=dict(PUBLISH),
+                tunnel=dict(tunnel.STATE),
             ))
         if p == "/api/chrome-profiles":
             return self._json(assist.chrome_profiles())
@@ -185,6 +217,25 @@ class Handler(BaseHTTPRequestHandler):
                 PUBLISH[stem] = dict(state="sending", message="Envoi en cours…")
             threading.Thread(target=_publish_worker, args=(stem, str(body.get("caption", ""))[:2200]), daemon=True).start()
             return self._json({"ok": True})
+        if p == "/api/share":
+            stem = Path(body.get("name", "")).name.rsplit(".", 1)[0]
+            f = config.OUTPUTS / f"{stem}.json"
+            if not f.exists():
+                return self._json({"error": "Vidéo introuvable."}, 404)
+            rec = json.loads(f.read_text())
+            caption = str(body.get("caption") or rec.get("caption") or "").strip() or share_default_caption(rec)
+            token = share.create(stem, caption[:2200], rec.get("product", ""))
+            url = f"{share.base_url(RUNTIME['port'])}/p/{token}"
+            return self._json(dict(token=token, url=url, qr=share.qr_svg(url), caption=caption,
+                                   mode="public" if share.PUBLIC_BASE["url"] else "wifi"))
+        if p == "/api/tunnel/start":
+            return self._json(tunnel.start(RUNTIME["port"]))
+        if p == "/api/tunnel/stop":
+            tunnel.stop()
+            return self._json(dict(tunnel.STATE))
+        if p == "/api/share/caption":
+            ok = share.set_caption(str(body.get("token", "")), str(body.get("caption", ""))[:2200])
+            return self._json({"ok": ok})
         if p == "/api/assist":
             stem = Path(body.get("name", "")).name.rsplit(".", 1)[0]
             f = config.OUTPUTS / f"{stem}.mp4"
@@ -263,6 +314,11 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_error(404)
 
 
+def share_default_caption(rec):
+    tags = config.load_settings().get("hashtags", "")
+    return f"{rec.get('product') or 'Vidéo'} 🔥 Clique sur le panier orange 🛒 {tags}".strip()
+
+
 def test_key():
     s = config.load_settings()
     if not s["anthropic_api_key"]:
@@ -285,7 +341,8 @@ def main():
     port = PORT
     for _ in range(20):
         try:
-            httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            httpd = ThreadingHTTPServer((HOST, port), Handler)
+            RUNTIME["port"] = port
             break
         except OSError:
             port += 1

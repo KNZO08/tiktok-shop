@@ -9,3 +9,4 @@ __pycache__/
 .DS_Store
 # capture d'écran d'origine (contient ton navigateur) : reste en local
 assets/screenshot_source.webp
+.tools/

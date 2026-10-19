@@ -70,7 +70,7 @@ def main():
     for d in items:
         print("=" * 70)
         print(f"JOB {d['job_id']}  ({d['kind']})  durée vidéo {d['duration']:.1f}s -> vise ~{d['target_words']} mots")
-        print("Légende :", (d.get("caption") or "(aucune)")[:300])
+        print("Légende :", (d.get("original_caption") or d.get("caption") or "(aucune)")[:400], "  <- à traduire en français dans \"caption\"")
         if d.get("extra_instructions"):
             print("Consignes du vendeur :", d["extra_instructions"])
         print("Planche de captures :", d.get("sheet"))
@@ -79,7 +79,7 @@ def main():
             print(json.dumps(d["previous"], ensure_ascii=False))
         print("Réponse à écrire dans :", d["reply_file"])
     print("=" * 70)
-    print('Format : {"product": "...", "segments": [{"text": "...", "gesture": "wow|open|point|raise|count|wave|shrug|emphasis|talk|basket"}]}')
+    print('Format : {"product": "...", "caption": "légende TikTok traduite en français + hashtags", "segments": [{"text": "...", "gesture": "wow|open|point|raise|count|wave|shrug|emphasis|talk|basket"}]}')
 
 
 if __name__ == "__main__":

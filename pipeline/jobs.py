@@ -96,7 +96,7 @@ class Manager:
             return []
         script = None
         if j.result and j.result.get("segments"):          # montage terminé : on le refait avec le même script
-            script = dict(product=j.result.get("product", ""), segments=j.result["segments"])
+            script = dict(product=j.result.get("product", ""), caption=j.result.get("caption", ""), segments=j.result["segments"])
         elif j.script:
             script = j.script
         return self.submit([j.url], {0: script} if script else None)
@@ -105,7 +105,7 @@ class Manager:
         """Refait le montage d'une vidéo de l'historique (même lien, même script, nouvelle animation)."""
         f = config.OUTPUTS / (name.rsplit(".", 1)[0] + ".json")
         d = json.loads(f.read_text())
-        return self.submit([d["url"]], {0: dict(product=d.get("product", ""), segments=d["segments"])})
+        return self.submit([d["url"]], {0: dict(product=d.get("product", ""), caption=d.get("caption", ""), segments=d["segments"])})
 
     def clear_finished(self):
         with self._lock:
@@ -224,6 +224,7 @@ def process(job, workdir):
     full_text = " ".join(x["text"] for x in script["segments"])
     record = dict(
         id=job.id, name=name, file=f"{name}.mp4", thumb=f"{name}.jpg", url=job.url, product=script.get("product", ""),
+        caption=(script.get("caption") or (job.script or {}).get("caption") or ""), original_caption=(meta.get("description") or meta.get("title") or ""),
         script=full_text, segments=script["segments"], duration=round(res["duration"], 2),
         source_duration=round(res["source_duration"], 2), voice_speed=round(res["atempo"], 3),
         video_speed=round(1 / res["video_factor"], 3), created=datetime.now().isoformat(timespec="seconds"),

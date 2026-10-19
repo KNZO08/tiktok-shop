@@ -11,32 +11,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from pipeline import assist, config, jobs, media, publish, share, tunnel, voice
+from pipeline import config, jobs, media, share, tunnel, voice
 
 PORT = int(os.environ.get("PORT", 8765))
 HOST = os.environ.get("HOST", "0.0.0.0")      # 0.0.0.0 : le téléphone (même Wi-Fi) peut ouvrir les liens /p/… ; tout le reste reste local
 RUNTIME = {"port": PORT}
 MANAGER = jobs.Manager()
-PUBLISH = {}                     # nom de vidéo -> {state: sending|done|error, message}
-PUBLISH_LOCK = threading.Lock()
-
-
-def _publish_worker(stem, caption):
-    def status(msg):
-        with PUBLISH_LOCK:
-            PUBLISH[stem] = dict(state="sending", message=msg)
-    try:
-        msg = publish.send_draft(config.OUTPUTS / f"{stem}.mp4", caption, config.load_settings(), status)
-        with PUBLISH_LOCK:
-            PUBLISH[stem] = dict(state="done", message=msg)
-    except publish.PublishError as e:
-        with PUBLISH_LOCK:
-            PUBLISH[stem] = dict(state="error", message=str(e))
-    except Exception as e:
-        with PUBLISH_LOCK:
-            PUBLISH[stem] = dict(state="error", message="Erreur inattendue : " + str(e)[:200])
-
-
 def ready_state():
     s = config.load_settings()
     return {"ffmpeg": True, "api_key": bool(s["anthropic_api_key"]), "mode": "api" if s["anthropic_api_key"] else "inbox"}
@@ -164,11 +144,8 @@ class Handler(BaseHTTPRequestHandler):
                 history=MANAGER.history(),
                 settings=config.public_settings(),
                 ready=ready_state(),
-                publish=dict(PUBLISH),
                 tunnel=dict(tunnel.STATE),
             ))
-        if p == "/api/chrome-profiles":
-            return self._json(assist.chrome_profiles())
         if p == "/api/voice-sample":
             v = parse_qs(u.query).get("voice", [config.load_settings()["voice"]])[0]
             if v not in [x["id"] for x in config.VOICES]:
@@ -204,19 +181,6 @@ class Handler(BaseHTTPRequestHandler):
             if m[2] == "cancel":
                 return self._json({"ok": MANAGER.cancel(m[1])})
             return self._json({"jobs": MANAGER.retry(m[1])})
-        if p == "/api/publish":
-            stem = Path(body.get("name", "")).name.rsplit(".", 1)[0]
-            if not (config.OUTPUTS / f"{stem}.mp4").exists():
-                return self._json({"error": "Vidéo introuvable."}, 404)
-            s = config.load_settings()
-            if not (s.get("uploadpost_key") and s.get("uploadpost_user")):
-                return self._json({"error": "not_configured"}, 400)
-            with PUBLISH_LOCK:
-                if PUBLISH.get(stem, {}).get("state") == "sending":
-                    return self._json({"ok": True})
-                PUBLISH[stem] = dict(state="sending", message="Envoi en cours…")
-            threading.Thread(target=_publish_worker, args=(stem, str(body.get("caption", ""))[:2200]), daemon=True).start()
-            return self._json({"ok": True})
         if p == "/api/share":
             stem = Path(body.get("name", "")).name.rsplit(".", 1)[0]
             f = config.OUTPUTS / f"{stem}.json"
@@ -236,26 +200,6 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/share/caption":
             ok = share.set_caption(str(body.get("token", "")), str(body.get("caption", ""))[:2200])
             return self._json({"ok": ok})
-        if p == "/api/assist":
-            stem = Path(body.get("name", "")).name.rsplit(".", 1)[0]
-            f = config.OUTPUTS / f"{stem}.mp4"
-            if not f.exists():
-                return self._json({"error": "Vidéo introuvable."}, 404)
-            profile = ""
-            accounts = config.load_settings().get("tiktok_accounts", [])
-            try:
-                profile = accounts[int(body.get("account"))].get("profile", "")
-            except (TypeError, ValueError, IndexError):
-                pass
-            assist.reveal(f)
-            assist.open_studio(profile)
-            return self._json({"ok": True})
-        if p == "/api/test-uploadpost":
-            key = config.load_settings().get("uploadpost_key", "")
-            if not key:
-                return self._json({"ok": False, "message": "Aucune clé enregistrée."})
-            ok, msg = publish.check_key(key)
-            return self._json({"ok": ok, "message": msg})
         if p == "/api/rerender":
             try:
                 return self._json({"jobs": MANAGER.rerender(Path(body.get("name", "")).name)})
@@ -266,23 +210,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if p == "/api/settings":
             patch = {}
-            for k in ("model", "voice", "voice_rate", "mirror", "concurrency", "extra_instructions", "layout", "uploadpost_user", "hashtags", "tiktok_accounts"):
+            for k in ("model", "voice", "voice_rate", "mirror", "concurrency", "extra_instructions", "layout", "hashtags"):
                 if k in body:
                     patch[k] = body[k]
             if isinstance(body.get("anthropic_api_key"), str) and body["anthropic_api_key"].strip():
                 patch["anthropic_api_key"] = body["anthropic_api_key"].strip()
-            if isinstance(body.get("uploadpost_key"), str) and body["uploadpost_key"].strip():
-                patch["uploadpost_key"] = body["uploadpost_key"].strip()
             if body.get("clear_api_key"):
                 patch["anthropic_api_key"] = ""
-            if "tiktok_accounts" in patch:
-                acc = []
-                for a in (patch["tiktok_accounts"] if isinstance(patch["tiktok_accounts"], list) else [])[:10]:
-                    if isinstance(a, dict):
-                        prof = str(a.get("profile", ""))[:40]
-                        acc.append({"label": str(a.get("label", "")).strip()[:60] or "Compte TikTok",
-                                    "profile": prof if re.fullmatch(r"[\w .\-]{0,40}", prof) else ""})
-                patch["tiktok_accounts"] = acc
             if "layout" in patch:
                 lo = patch["layout"]
                 patch["layout"] = {

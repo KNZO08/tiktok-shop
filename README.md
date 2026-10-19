@@ -33,9 +33,6 @@ la vidéo part dans TikTok via le menu « Partager »). Dans TikTok : Suivant �
   temporaire (HTTPS, gratuit, via Cloudflare ; l'outil est téléchargé une fois dans `.tools/`). Seule l'adresse secrète de la vidéo est
   accessible depuis Internet : le reste du dashboard (réglages, clés, vidéos) reste fermé. Les liens expirent après 3 h.
 - La légende est la **traduction française** de la description de la vidéo d'origine (écrite avec le script).
-- **Sur ordinateur** : bouton « Poster depuis l'ordinateur » (ouvre TikTok Studio dans le profil Chrome du compte, copie la légende, montre la vidéo).
-  Réglages › Mes comptes TikTok : un profil Chrome par compte.
-- Option payante : envoi automatique dans les brouillons de l'appli TikTok via upload-post.com (Réglages).
 
 ## Fichiers
 

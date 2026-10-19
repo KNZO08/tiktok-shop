@@ -218,20 +218,7 @@ legend { font-weight: 700; font-size: 15px; padding: 0; margin-bottom: 6px; }
 .notice b { margin-right: 4px; }
 .pill.waiting { background: color-mix(in srgb, var(--accent-2) 22%, var(--surface)); color: var(--text); }
 
-.pubstat { font-size: 13px; line-height: 1.5; background: var(--surface-2); border-radius: 10px; padding: 8px 12px; }
-.pubstat.done { background: color-mix(in srgb, var(--ok) 12%, var(--surface)); }
-.pubstat.error { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
-#upStatus.ok { color: var(--ok); } #upStatus.bad { color: var(--danger); }
-#fsUp.attention { animation: pulse 1.2s ease 2; }
 
-.acc-list { display: grid; gap: 8px; }
-.acc-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
-.acc-row .icon-btn { width: 34px; height: 34px; }
-.modal.pick { width: min(420px, calc(100vw - 24px)); }
-.pick-body { padding: 22px; display: grid; gap: 14px; }
-.pick-list { display: grid; gap: 8px; }
-.pick-list .btn { justify-content: flex-start; }
-@media (max-width: 520px) { .acc-row { grid-template-columns: 1fr; } }
 
 .modal.postm { width: min(820px, calc(100vw - 24px)); }
 .post-body { display: grid; grid-template-columns: 270px 1fr; gap: 24px; padding: 22px; }

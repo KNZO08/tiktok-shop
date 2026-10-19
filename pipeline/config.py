@@ -21,9 +21,6 @@ DEFAULTS = {
     "concurrency": 2,
     "extra_instructions": "",
     "layout": {"height_pct": 34, "right_pct": 15, "bottom_pct": 19},
-    "tiktok_accounts": [],      # [{label, profile}] : profil Chrome à utiliser pour chaque compte TikTok
-    "uploadpost_key": "",
-    "uploadpost_user": "",
     "hashtags": "#tiktokmademebuyit #tiktokshop #fyp #bonplan",
     "wps": 3.7,           # mots par seconde (mesuré et affiné automatiquement)
 }
@@ -85,10 +82,6 @@ def public_settings():
     key = s["anthropic_api_key"]
     s = dict(s)
     s["anthropic_api_key"] = ""
-    up = s.get("uploadpost_key", "")
-    s["uploadpost_key"] = ""
-    s["has_uploadpost_key"] = bool(up)
-    s["uploadpost_key_hint"] = (up[:4] + "…" + up[-4:]) if len(up) > 12 else ""
     s["has_api_key"] = bool(key)
     s["api_key_hint"] = (key[:7] + "…" + key[-4:]) if len(key) > 14 else ""
     s["voices"] = VOICES

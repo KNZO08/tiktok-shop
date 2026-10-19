@@ -217,3 +217,9 @@ legend { font-weight: 700; font-size: 15px; padding: 0; margin-bottom: 6px; }
 .notice { background: color-mix(in srgb, var(--accent-2) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--border)); border-radius: 14px; padding: 12px 16px; font-size: 14px; line-height: 1.5; }
 .notice b { margin-right: 4px; }
 .pill.waiting { background: color-mix(in srgb, var(--accent-2) 22%, var(--surface)); color: var(--text); }
+
+.pubstat { font-size: 13px; line-height: 1.5; background: var(--surface-2); border-radius: 10px; padding: 8px 12px; }
+.pubstat.done { background: color-mix(in srgb, var(--ok) 12%, var(--surface)); }
+.pubstat.error { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
+#upStatus.ok { color: var(--ok); } #upStatus.bad { color: var(--danger); }
+#fsUp.attention { animation: pulse 1.2s ease 2; }

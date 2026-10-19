@@ -8,6 +8,7 @@ let count = 5;
 let pollTimer = null;
 let submitting = false;
 let viewerName = null;
+let viewerRec = null;
 
 /* ---------- réseau ---------- */
 async function api(path, opts = {}) {
@@ -165,6 +166,7 @@ function buildCard(j) {
 }
 
 function updateCard(c, j) {
+  if (c.pubEl) renderPub(c.pubEl, c.stem);
   c.url.textContent = j.url; c.url.title = j.url;
   c.pill.textContent = j.waiting ? "Claude écrit…" : (PILL[j.status] || j.status);
   c.pill.className = "pill " + (j.waiting ? "waiting" : j.status);
@@ -195,11 +197,49 @@ function updateCard(c, j) {
         el("span", { text: `voix ×${r.voice_speed.toFixed(2).replace(".", ",")}` }),
         el("span", { text: `vidéo ×${r.video_speed.toFixed(2).replace(".", ",")}` })),
       el("details", { class: "job-script" }, el("summary", { text: "Voir le script" }), el("div", { class: "script", text: r.script })));
+    c.pubEl = el("p", { class: "pubstat", hidden: true }); c.stem = stemOf(r);
+    c.extra.append(c.pubEl);
     c.actions.append(
       el("a", { class: "btn primary", href: `/outputs/${r.file}`, download: r.file, text: "Télécharger" }),
+      el("button", { class: "btn", type: "button", text: "Envoyer dans mes brouillons TikTok", onclick: () => publishVideo(r) }),
+      el("button", { class: "btn ghost", type: "button", text: "Copier la légende", onclick: e => copyCaption(r, e.currentTarget) }),
       el("button", { class: "btn ghost", type: "button", text: "Voir dans le Finder", onclick: () => api("/api/reveal", { method: "POST", body: { name: r.file } }) }),
       el("button", { class: "btn ghost", type: "button", text: "Refaire le montage", title: "Même lien, même script, animation recalculée", onclick: async () => { await api(`/api/jobs/${j.id}/retry`, { method: "POST" }); refresh(); } }));
   }
+}
+
+/* ---------- publication TikTok (brouillons) ---------- */
+const stemOf = r => r.file.replace(/\.mp4$/, "");
+function captionFor(r) {
+  const tags = (state.settings && state.settings.hashtags) || "";
+  return `${r.product || "Vidéo"} 🔥 Clique sur le panier orange 🛒 ${tags}`.trim();
+}
+function renderPub(elm, stem) {
+  const p = (state.publish || {})[stem];
+  if (!p) { elm.hidden = true; return; }
+  elm.hidden = false;
+  elm.className = "pubstat " + p.state;
+  elm.textContent = p.state === "sending" ? "⏳ " + p.message
+    : p.state === "done" ? "✅ " + p.message + " Ouvre l'appli TikTok (notification ou Boîte de réception), ajoute le panier orange, colle la légende et publie."
+    : "⚠️ " + p.message;
+}
+async function publishVideo(r) {
+  const s = state.settings || {};
+  if (!s.has_uploadpost_key || !s.uploadpost_user) {
+    openSettings(false);
+    const fs = $("#fsUp"); fs.classList.remove("attention"); void fs.offsetWidth; fs.classList.add("attention");
+    fs.scrollIntoView({ block: "center" });
+    $("#upStatus").textContent = "Ajoute ta clé Upload-Post et le nom de ton profil pour envoyer sur TikTok.";
+    $("#upStatus").className = "small bad";
+    return;
+  }
+  try { await api("/api/publish", { method: "POST", body: { name: r.file, caption: captionFor(r) } }); }
+  catch (e) { alert(e.message); }
+  refresh();
+}
+async function copyCaption(r, btn) {
+  try { await navigator.clipboard.writeText(captionFor(r)); } catch (e) { prompt("Copie la légende :", captionFor(r)); return; }
+  const t = btn.textContent; btn.textContent = "Copiée ✓"; setTimeout(() => { btn.textContent = t; }, 1600);
 }
 
 /* ---------- historique ---------- */
@@ -220,7 +260,8 @@ function renderHistory() {
   });
 }
 function openViewer(h) {
-  viewerName = h.name;
+  viewerName = h.name; viewerRec = h;
+  renderPub($("#viewerPub"), stemOf(h));
   const v = $("#viewerVideo");
   v.src = `/outputs/${h.file}`; v.poster = `/outputs/${h.thumb}`;
   $("#viewerTitle").textContent = h.product || "Vidéo générée";
@@ -248,6 +289,11 @@ function fillSettings() {
   $("#mirror").checked = !!s.mirror;
   $("#concurrency").value = String(s.concurrency);
   $("#extra").value = s.extra_instructions || "";
+  $("#upUser").value = s.uploadpost_user || "";
+  $("#hashtags").value = s.hashtags || "";
+  $("#upKey").value = "";
+  $("#upKey").placeholder = s.has_uploadpost_key ? (s.uploadpost_key_hint ? `Clé enregistrée (${s.uploadpost_key_hint})` : "Clé enregistrée") : "Clé API Upload-Post";
+  $("#upStatus").textContent = s.has_uploadpost_key ? "Une clé est enregistrée." : ""; $("#upStatus").className = "small";
   $("#model").value = s.model;
   $("#apiKey").value = "";
   $("#apiKey").placeholder = s.has_api_key ? `Clé enregistrée (${s.api_key_hint}) — colle une autre clé pour la remplacer` : "sk-ant-…";
@@ -271,8 +317,10 @@ async function saveSettings() {
   const body = {
     voice: $("#voice").value, voice_rate: $("#voiceRate").value, mirror: $("#mirror").checked,
     concurrency: +$("#concurrency").value, extra_instructions: $("#extra").value, model: $("#model").value.trim() || "claude-opus-5-5",
-    layout: currentLayout(),
+    layout: currentLayout(), uploadpost_user: $("#upUser").value.trim(), hashtags: $("#hashtags").value.trim(),
   };
+  const upKey = $("#upKey").value.trim();
+  if (upKey) body.uploadpost_key = upKey;
   const key = $("#apiKey").value.trim();
   if (key) body.anthropic_api_key = key;
   state.settings = await api("/api/settings", { method: "POST", body });
@@ -296,7 +344,9 @@ async function refresh() {
     state = await api("/api/state");
   } catch (e) { return; }
   renderTop(); renderJobs(); renderHistory();
-  const active = state.jobs.some(j => j.status === "queued" || j.status === "running");
+  if (viewerRec && $("#viewer").open) renderPub($("#viewerPub"), stemOf(viewerRec));
+  const active = state.jobs.some(j => j.status === "queued" || j.status === "running")
+    || Object.values(state.publish || {}).some(p => p.state === "sending");
   clearTimeout(pollTimer);
   pollTimer = setTimeout(refresh, active ? 700 : 4000);
 }
@@ -333,6 +383,16 @@ function init() {
       refresh();
     } catch (e) { st.textContent = e.message; st.className = "small bad"; }
   };
+  $("#testUp").onclick = async () => {
+    const st = $("#upStatus"); st.className = "small"; st.textContent = "Vérification…";
+    try {
+      const key = $("#upKey").value.trim();
+      if (key) state.settings = await api("/api/settings", { method: "POST", body: { uploadpost_key: key } });
+      const r = await api("/api/test-uploadpost", { method: "POST" });
+      st.textContent = r.message; st.className = "small " + (r.ok ? "ok" : "bad");
+      refresh();
+    } catch (e) { st.textContent = e.message; st.className = "small bad"; }
+  };
   $("#playVoice").onclick = async () => {
     const b = $("#playVoice"); b.disabled = true; const t = b.textContent; b.textContent = "…";
     try {
@@ -348,6 +408,8 @@ function init() {
     await api("/api/rerender", { method: "POST", body: { name: viewerName } });
     $("#viewer").close(); refresh(); $("#progress").scrollIntoView({ behavior: "smooth" });
   };
+  $("#viewerPublish").onclick = () => viewerRec && publishVideo(viewerRec);
+  $("#viewerCopy").onclick = e => viewerRec && copyCaption(viewerRec, e.currentTarget);
   $("#viewerReveal").onclick = () => viewerName && api("/api/reveal", { method: "POST", body: { name: viewerName + ".mp4" } });
   $("#viewerDelete").onclick = async () => {
     if (!viewerName || !confirm("Supprimer définitivement cette vidéo ?")) return;

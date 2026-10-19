@@ -93,8 +93,11 @@
       <h3 id="viewerTitle"></h3>
       <p class="muted small" id="viewerMeta"></p>
       <div class="script" id="viewerScript"></div>
+      <p class="pubstat" id="viewerPub" hidden></p>
       <div class="row wrap-row">
         <a class="btn primary" id="viewerDl" download>Télécharger</a>
+        <button class="btn" id="viewerPublish" type="button" title="Envoie la vidéo dans les brouillons de ton appli TikTok">Envoyer dans mes brouillons TikTok</button>
+        <button class="btn ghost" id="viewerCopy" type="button">Copier la légende</button>
         <button class="btn ghost" id="viewerRerender" type="button" title="Même lien, même script, animation recalculée">Refaire le montage</button>
         <button class="btn ghost" id="viewerReveal" type="button">Voir dans le Finder</button>
         <button class="btn ghost danger" id="viewerDelete" type="button">Supprimer</button>
@@ -138,6 +141,20 @@
             </select>
           </label>
           <audio id="voiceAudio" hidden></audio>
+        </fieldset>
+
+        <fieldset id="fsUp">
+          <legend>Publier sur TikTok <span class="tag soft">facultatif</span></legend>
+          <p class="muted small">Pour envoyer une vidéo dans tes <b>brouillons TikTok</b> en un clic : crée un compte sur <b>upload-post.com</b> (TikTok demande une offre payante), connecte ton TikTok, puis copie ici ta clé API et le nom de ton profil. Ensuite, dans l'appli TikTok, tu ajoutes le panier orange et tu publies.</p>
+          <div class="row">
+            <input type="password" id="upKey" placeholder="Clé API Upload-Post" autocomplete="off" spellcheck="false">
+            <button class="btn ghost" id="testUp" type="button">Vérifier</button>
+          </div>
+          <input type="text" id="upUser" placeholder="Nom du profil Upload-Post" autocomplete="off" spellcheck="false">
+          <p class="small" id="upStatus"></p>
+          <label class="field">Hashtags de la légende
+            <input type="text" id="hashtags" spellcheck="false">
+          </label>
         </fieldset>
 
         <fieldset>

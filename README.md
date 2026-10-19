@@ -22,6 +22,13 @@ Laisse la fenêtre noire ouverte tant que tu l'utilises.
 Dans **Réglages**, tu peux coller une clé API Anthropic (facultatif) et choisir la voix, la position du personnage
 (avec un aperçu de l'écran TikTok) et le nombre de vidéos générées en même temps.
 
+## Envoyer sur TikTok (brouillons)
+
+Bouton **« Envoyer dans mes brouillons TikTok »** sur chaque vidéo : elle arrive dans l'appli TikTok (notification ou Boîte de réception).
+Tu y ajoutes le **panier orange** (le lien produit TikTok Shop s'ajoute dans l'appli, au moment de publier), tu colles la légende
+(bouton « Copier la légende ») et tu publies. Il faut un compte sur **upload-post.com** (offre payante pour TikTok), ton TikTok connecté,
+puis la clé API et le nom du profil dans Réglages › « Publier sur TikTok ».
+
 ## Fichiers
 
 - `server.py` — le dashboard · `web/` — l'interface

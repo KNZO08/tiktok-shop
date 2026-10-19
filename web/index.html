@@ -95,8 +95,9 @@
       <div class="script" id="viewerScript"></div>
       <p class="pubstat" id="viewerPub" hidden></p>
       <div class="row wrap-row">
-        <a class="btn primary" id="viewerDl" download>Télécharger</a>
-        <button class="btn" id="viewerPublish" type="button" title="Envoie la vidéo dans les brouillons de ton appli TikTok">Envoyer dans mes brouillons TikTok</button>
+        <a class="btn" id="viewerDl" download>Télécharger</a>
+        <button class="btn primary" id="viewerAssist" type="button" title="Gratuit : ouvre TikTok Studio, copie la légende et montre la vidéo">Publier sur TikTok</button>
+        <button class="btn" id="viewerPublish" type="button" title="Envoie la vidéo dans les brouillons de ton appli TikTok (Upload-Post, payant)" hidden>Envoyer en brouillon (Upload-Post)</button>
         <button class="btn ghost" id="viewerCopy" type="button">Copier la légende</button>
         <button class="btn ghost" id="viewerRerender" type="button" title="Même lien, même script, animation recalculée">Refaire le montage</button>
         <button class="btn ghost" id="viewerReveal" type="button">Voir dans le Finder</button>
@@ -104,6 +105,15 @@
         <button class="btn ghost" id="viewerClose" type="button">Fermer</button>
       </div>
     </div>
+  </div>
+</dialog>
+
+<!-- CHOIX DU COMPTE -->
+<dialog id="accountPick" class="modal pick">
+  <div class="pick-body">
+    <h3>Sur quel compte TikTok ?</h3>
+    <div id="pickList" class="pick-list"></div>
+    <button class="btn ghost" id="pickCancel" type="button">Annuler</button>
   </div>
 </dialog>
 
@@ -143,8 +153,15 @@
           <audio id="voiceAudio" hidden></audio>
         </fieldset>
 
+        <fieldset id="fsAcc">
+          <legend>Mes comptes TikTok <span class="tag soft">gratuit</span></legend>
+          <p class="muted small">Le bouton <b>« Publier sur TikTok »</b> ouvre TikTok Studio dans le profil Chrome de ton compte, copie la légende et montre la vidéo : tu n'as plus qu'à la glisser, ajouter le panier orange et publier. Un profil Chrome par compte TikTok (connecte-toi une fois dans chacun).</p>
+          <div id="accList" class="acc-list"></div>
+          <button class="btn ghost" id="addAcc" type="button">+ Ajouter un compte</button>
+        </fieldset>
+
         <fieldset id="fsUp">
-          <legend>Publier sur TikTok <span class="tag soft">facultatif</span></legend>
+          <legend>Envoi automatique en brouillon <span class="tag soft">option payante</span></legend>
           <p class="muted small">Pour envoyer une vidéo dans tes <b>brouillons TikTok</b> en un clic : crée un compte sur <b>upload-post.com</b> (TikTok demande une offre payante), connecte ton TikTok, puis copie ici ta clé API et le nom de ton profil. Ensuite, dans l'appli TikTok, tu ajoutes le panier orange et tu publies.</p>
           <div class="row">
             <input type="password" id="upKey" placeholder="Clé API Upload-Post" autocomplete="off" spellcheck="false">

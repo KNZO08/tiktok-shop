@@ -21,6 +21,7 @@ DEFAULTS = {
     "concurrency": 2,
     "extra_instructions": "",
     "layout": {"height_pct": 34, "right_pct": 15, "bottom_pct": 19},
+    "tiktok_accounts": [],      # [{label, profile}] : profil Chrome à utiliser pour chaque compte TikTok
     "uploadpost_key": "",
     "uploadpost_user": "",
     "hashtags": "#tiktokmademebuyit #tiktokshop #fyp #bonplan",

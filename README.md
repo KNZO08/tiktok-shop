@@ -22,12 +22,16 @@ Laisse la fenêtre noire ouverte tant que tu l'utilises.
 Dans **Réglages**, tu peux coller une clé API Anthropic (facultatif) et choisir la voix, la position du personnage
 (avec un aperçu de l'écran TikTok) et le nombre de vidéos générées en même temps.
 
-## Envoyer sur TikTok (brouillons)
+## Publier sur TikTok (gratuit, pour chaque compte)
 
-Bouton **« Envoyer dans mes brouillons TikTok »** sur chaque vidéo : elle arrive dans l'appli TikTok (notification ou Boîte de réception).
-Tu y ajoutes le **panier orange** (le lien produit TikTok Shop s'ajoute dans l'appli, au moment de publier), tu colles la légende
-(bouton « Copier la légende ») et tu publies. Il faut un compte sur **upload-post.com** (offre payante pour TikTok), ton TikTok connecté,
-puis la clé API et le nom du profil dans Réglages › « Publier sur TikTok ».
+Bouton **« Publier sur TikTok »** sur chaque vidéo : il copie la légende, ouvre **TikTok Studio** dans le profil Chrome de ton compte
+et montre la vidéo dans le Finder. Tu la glisses dans Studio, tu colles la légende, tu ajoutes le **panier orange** (produit TikTok Shop)
+et tu publies. Aucun abonnement, aucune clé.
+
+Dans **Réglages › Mes comptes TikTok**, ajoute un compte par profil Chrome (connecte-toi à TikTok une fois dans chaque profil) :
+si tu en as plusieurs, le bouton te demande sur lequel publier.
+
+Option payante (envoi automatique dans les brouillons de l'appli TikTok via upload-post.com) : Réglages › « Envoi automatique en brouillon ».
 
 ## Fichiers
 

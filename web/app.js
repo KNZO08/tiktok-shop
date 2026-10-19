@@ -200,8 +200,9 @@ function updateCard(c, j) {
     c.pubEl = el("p", { class: "pubstat", hidden: true }); c.stem = stemOf(r);
     c.extra.append(c.pubEl);
     c.actions.append(
-      el("a", { class: "btn primary", href: `/outputs/${r.file}`, download: r.file, text: "Télécharger" }),
-      el("button", { class: "btn", type: "button", text: "Envoyer dans mes brouillons TikTok", onclick: () => publishVideo(r) }),
+      el("a", { class: "btn", href: `/outputs/${r.file}`, download: r.file, text: "Télécharger" }),
+      el("button", { class: "btn primary", type: "button", text: "Publier sur TikTok", title: "Gratuit : ouvre TikTok Studio, copie la légende et montre la vidéo", onclick: () => assistPublish(r) }),
+      ...(state.settings && state.settings.has_uploadpost_key ? [el("button", { class: "btn", type: "button", text: "Envoyer en brouillon (Upload-Post)", onclick: () => publishVideo(r) })] : []),
       el("button", { class: "btn ghost", type: "button", text: "Copier la légende", onclick: e => copyCaption(r, e.currentTarget) }),
       el("button", { class: "btn ghost", type: "button", text: "Voir dans le Finder", onclick: () => api("/api/reveal", { method: "POST", body: { name: r.file } }) }),
       el("button", { class: "btn ghost", type: "button", text: "Refaire le montage", title: "Même lien, même script, animation recalculée", onclick: async () => { await api(`/api/jobs/${j.id}/retry`, { method: "POST" }); refresh(); } }));
@@ -214,8 +215,10 @@ function captionFor(r) {
   const tags = (state.settings && state.settings.hashtags) || "";
   return `${r.product || "Vidéo"} 🔥 Clique sur le panier orange 🛒 ${tags}`.trim();
 }
+const assistMsg = {};
 function renderPub(elm, stem) {
   const p = (state.publish || {})[stem];
+  if (!p && assistMsg[stem]) { elm.hidden = false; elm.className = "pubstat done"; elm.textContent = assistMsg[stem]; return; }
   if (!p) { elm.hidden = true; return; }
   elm.hidden = false;
   elm.className = "pubstat " + p.state;
@@ -236,6 +239,31 @@ async function publishVideo(r) {
   try { await api("/api/publish", { method: "POST", body: { name: r.file, caption: captionFor(r) } }); }
   catch (e) { alert(e.message); }
   refresh();
+}
+const accounts = () => (state.settings && state.settings.tiktok_accounts) || [];
+function pickAccount() {
+  const acc = accounts();
+  if (acc.length <= 1) return Promise.resolve(acc.length ? 0 : null);
+  return new Promise(resolve => {
+    const dlg = $("#accountPick"), list = $("#pickList");
+    list.innerHTML = "";
+    let done = false;
+    const finish = v => { if (done) return; done = true; dlg.close(); resolve(v); };
+    acc.forEach((a, i) => list.append(el("button", { class: "btn", type: "button", text: a.label, onclick: () => finish(i) })));
+    $("#pickCancel").onclick = () => finish(undefined);
+    dlg.addEventListener("close", () => finish(undefined), { once: true });
+    dlg.showModal();
+  });
+}
+async function assistPublish(r) {
+  const idx = await pickAccount();
+  if (idx === undefined) return;
+  try { await navigator.clipboard.writeText(captionFor(r)); } catch (e) { /* on affichera quand même les étapes */ }
+  try { await api("/api/assist", { method: "POST", body: { name: r.file, account: idx } }); }
+  catch (e) { alert(e.message); return; }
+  const who = idx !== null ? ` (compte « ${accounts()[idx].label} »)` : "";
+  assistMsg[stemOf(r)] = `📋 Légende copiée${who}. Dans TikTok Studio : 1) glisse la vidéo (elle est sélectionnée dans le Finder), 2) colle la légende (Cmd+V), 3) ajoute le produit avec le panier orange, 4) publie.`;
+  renderJobs(); if (viewerRec && $("#viewer").open) renderPub($("#viewerPub"), stemOf(viewerRec));
 }
 async function copyCaption(r, btn) {
   try { await navigator.clipboard.writeText(captionFor(r)); } catch (e) { prompt("Copie la légende :", captionFor(r)); return; }
@@ -261,6 +289,7 @@ function renderHistory() {
 }
 function openViewer(h) {
   viewerName = h.name; viewerRec = h;
+  $("#viewerPublish").hidden = !(state.settings && state.settings.has_uploadpost_key);
   renderPub($("#viewerPub"), stemOf(h));
   const v = $("#viewerVideo");
   v.src = `/outputs/${h.file}`; v.poster = `/outputs/${h.thumb}`;
@@ -280,8 +309,31 @@ function applyLayoutPreview(lo) {
 function currentLayout() {
   return { height_pct: +$("#sHeight").value, right_pct: +$("#sRight").value, bottom_pct: +$("#sBottom").value };
 }
+let chromeProfiles = null;
+function accRow(a = { label: "", profile: "" }) {
+  const sel = el("select", { class: "acc-profile", "aria-label": "Profil Chrome" },
+    el("option", { value: "", text: "Navigateur par défaut" }),
+    ...(chromeProfiles || []).map(p => el("option", { value: p.dir, text: `Chrome : ${p.name}` })));
+  sel.value = a.profile || "";
+  const row = el("div", { class: "acc-row" },
+    el("input", { type: "text", class: "acc-label", placeholder: "Nom du compte (ex. @monshop)", value: a.label || "", "aria-label": "Nom du compte" }),
+    sel,
+    el("button", { class: "icon-btn", type: "button", "aria-label": "Retirer ce compte", text: "✕", onclick: () => row.remove() }));
+  return row;
+}
+async function fillAccounts() {
+  if (chromeProfiles === null) { try { chromeProfiles = await api("/api/chrome-profiles"); } catch (e) { chromeProfiles = []; } }
+  const box = $("#accList"); box.innerHTML = "";
+  const acc = (state.settings && state.settings.tiktok_accounts) || [];
+  (acc.length ? acc : [{ label: "", profile: "" }]).forEach(a => box.append(accRow(a)));
+}
+function collectAccounts() {
+  return $$("#accList .acc-row").map(r => ({ label: $(".acc-label", r).value.trim(), profile: $(".acc-profile", r).value }))
+    .filter(a => a.label || a.profile);
+}
 function fillSettings() {
   const s = state.settings; if (!s) return;
+  fillAccounts();
   const sel = $("#voice");
   if (!sel.options.length) s.voices.forEach(v => sel.append(el("option", { value: v.id, text: v.label })));
   sel.value = s.voice;
@@ -317,7 +369,7 @@ async function saveSettings() {
   const body = {
     voice: $("#voice").value, voice_rate: $("#voiceRate").value, mirror: $("#mirror").checked,
     concurrency: +$("#concurrency").value, extra_instructions: $("#extra").value, model: $("#model").value.trim() || "claude-opus-5-5",
-    layout: currentLayout(), uploadpost_user: $("#upUser").value.trim(), hashtags: $("#hashtags").value.trim(),
+    layout: currentLayout(), tiktok_accounts: collectAccounts(), uploadpost_user: $("#upUser").value.trim(), hashtags: $("#hashtags").value.trim(),
   };
   const upKey = $("#upKey").value.trim();
   if (upKey) body.uploadpost_key = upKey;
@@ -383,6 +435,7 @@ function init() {
       refresh();
     } catch (e) { st.textContent = e.message; st.className = "small bad"; }
   };
+  $("#addAcc").onclick = () => $("#accList").append(accRow());
   $("#testUp").onclick = async () => {
     const st = $("#upStatus"); st.className = "small"; st.textContent = "Vérification…";
     try {
@@ -408,6 +461,7 @@ function init() {
     await api("/api/rerender", { method: "POST", body: { name: viewerName } });
     $("#viewer").close(); refresh(); $("#progress").scrollIntoView({ behavior: "smooth" });
   };
+  $("#viewerAssist").onclick = () => viewerRec && assistPublish(viewerRec);
   $("#viewerPublish").onclick = () => viewerRec && publishVideo(viewerRec);
   $("#viewerCopy").onclick = e => viewerRec && copyCaption(viewerRec, e.currentTarget);
   $("#viewerReveal").onclick = () => viewerName && api("/api/reveal", { method: "POST", body: { name: viewerName + ".mp4" } });
